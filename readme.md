@@ -4,7 +4,7 @@ A project to get lots of feeds into a database.
 
 ### How it works
 
-Each user has a single OPML file containing their subscriptions. You can edit the file whenever you like. 
+Each feedBase user has a single OPML file containing their subscriptions. You can edit the file whenever you like. 
 
 When your list changes your subscriptions are added to a database of the subscriptions of all other Scripting News readers. From that we compile a top 100 list so we can see who everyone else subscribes to and find other interesting sites. 
 
