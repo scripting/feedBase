@@ -18,11 +18,11 @@ As you see when the code is uploaded, there are a lot of pieces in the feedBase 
 
 ### Open source
 
-The database is open source so if other communities want to run their own feedBases, you're welcome to. It requires a MySQL database and a little bit of configuration. I'll write docs for that when it's time to lock things down. 
+The database is open source so if other communities want to run their own feedBases, you're welcome to. It requires a MySQL database and a  bit of configuration. I'll write docs for that when it's time to lock things down. 
 
 ### Open formats and protocols
 
-RSS and OPML are a strong foundation, widely supported. 
+RSS and OPML are a strong foundation, widely supported. As they say, really simple. 
 
 ### Ideas
 
