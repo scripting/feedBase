@@ -6,9 +6,7 @@ A project to get lots of feeds into a database.
 
 Each user has a single OPML file containing their subscriptions. You can edit the file whenever you like. 
 
-When your list changes your subscriptions are added to a database of the subscriptions of all other Scripting News readers. 
-
-We compile a top 100 list so we can see who everyone else subscribes to and find other interesting sites. 
+When your list changes your subscriptions are added to a database of the subscriptions of all other Scripting News readers. From that we compile a top 100 list so we can see who everyone else subscribes to and find other interesting sites. 
 
 Periodically we read the feeds to keep our database of info about them up to date. 
 
