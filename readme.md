@@ -1,6 +1,6 @@
 ## What is feedBase?
 
-A project to get feeds into a base.
+A project to get lots of feeds into a database.
 
 ### How it works
 
@@ -13,4 +13,8 @@ The blogosphere needs glue. We'll never know how much stuff is going on until we
 ### Open source
 
 The database is open source so if other communities want to run their own feedBases, you're welcome to. It requires a MySQL database and a little bit of configuration. I'll write docs for that when it's time to lock things down. 
+
+### Ideas
+
+There are lots of ideas. I want to write some of them down here. 
 
