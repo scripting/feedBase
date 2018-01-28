@@ -16,17 +16,17 @@ The world of news and the blogosphere need glue. We'll never know how much stuff
 
 ### Why now?
 
-I'm ready to do it, it seems. I did a project late last year to learn how MySQL works in server apps written in Node, and this was a simple evolution of what I had working.  We also have feed reading down in Node, and lots of tools, etc. So it's a good time to try to create some community glue. ;-)
+I'm ready to do it, it seems. I did a project late last year to learn how MySQL works in server apps written in Node, and this was a simple evolution of what I already had working.  We also have feed reading down in Node, and lots of tools, etc. So it's a good time to try to create some community glue. ;-)
 
 As you see when the code is uploaded, there are a lot of pieces in the feedBase server. Yet it feels like a small piece of code. Lots and lots of factoring. 
 
 ### Open source
 
-The database is open source so if other communities want to run their own feedBases, you're welcome to. It requires a MySQL database and a  bit of configuration. I'll write docs for that when it's time to lock things down. 
+The database software is open source so if other communities want to run their own feedBases, you're welcome to. It requires a MySQL database and a  bit of configuration. I'll write docs for that when it's time to lock things down. 
 
 ### Open formats and protocols
 
-RSS and OPML are a strong foundation, widely supported. As they say, really simple. 
+RSS and OPML are a strong foundation, widely supported. And as they say, really simple. 
 
 ### Ideas
 
