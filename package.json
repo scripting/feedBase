@@ -1,0 +1,21 @@
+{
+	"name": "feedbase",
+	"description": "Let's get some feeds into a database.",
+	"author": "Dave Winer <dave@smallpicture.com>",
+	"version": "0.4.10",
+	"dependencies" : {
+		"mysql": "*",
+		"request": "*",
+		"feedparser": "*",
+		"dateformat": "*",
+		"daveutils": "*",
+		"davetwitter": "*",
+		"daveopml": "*",
+		"daves3": "*",
+		"s3folderloader": "*"
+		}, 
+	"license": "MIT",
+	"engines": {
+		"node": "*"
+		}
+	}
