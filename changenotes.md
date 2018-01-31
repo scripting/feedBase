@@ -2,7 +2,7 @@
 
 There's a new HTTP call -- /getopmlsubs -- It takes one param, username, and it returns the OPML for the feeds the user is subscribed to. 
 
-The info comes out of the database, not from the OPML that the user entered. So it has the effect of normalizing the data, and over time since we will keep the feed table updated, will provide a way for feeds to correct the information about them.
+The info comes out of the database, not from the OPML that the user entered. So it has the effect of normalizing the data, and over time since we will keep the <i>feeds</i> table updated, will provide a way for feeds to correct the information about them.
 
 Note that this is public. You don't need to be me to read this data. This is establishing the principle that this is a publishing system. When you upload your OPML it's public. 
 
