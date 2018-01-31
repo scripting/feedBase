@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.4.11";     
+var myProductName = "feedBase", myVersion = "0.4.12";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -13,6 +13,7 @@ const davetwitter = require ("davetwitter");
 var feedParser = require ("feedparser");
 
 var config = {
+	urlServerHomePageSource: undefined,
 	outlineImportFolder: "outlines/",
 	usersFolder: "users/",
 	fnamePrefs: "prefs.json",
@@ -429,6 +430,25 @@ function handleHttpRequest (theRequest) {
 			returnData (jstruct);
 			}
 		}
+	function returnServerHomePage () { //return true if we handled it
+		if (config.urlServerHomePageSource === undefined) {
+			return (false);
+			}
+		request (config.urlServerHomePageSource, function (error, response, templatetext) {
+			if (!error && response.statusCode == 200) {
+				var pagetable = {
+					productName: myProductName,
+					version: myVersion
+					};
+				var pagetext = utils.multipleReplaceAll (templatetext, pagetable, false, "[%", "%]");
+				returnHtml (pagetext);
+				}
+			else {
+				returnNotFound ();
+				}
+			});
+		return (true);
+		}
 	function callWithScreenname (callback) {
 		davetwitter.getScreenName (token, secret, function (screenname) {
 			if (screenname === undefined) {
@@ -441,6 +461,8 @@ function handleHttpRequest (theRequest) {
 		}
 	
 	switch (theRequest.lowerpath) {
+		case "/":
+			return (returnServerHomePage ());
 		case "/now": 
 			theRequest.httpReturn (200, "text/plain", new Date ());
 			return (true); //we handled it
