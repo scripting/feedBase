@@ -1,3 +1,7 @@
+### v0.4.12 -- 1/31/18 by DW
+
+There's now a placeholder page at http://feedbase.io/.
+
 ### v0.4.11 -- 1/31/18 by DW
 
 There's a new HTTP call -- /getopmlsubs -- It takes one param, username, and it returns the OPML for the feeds the user is subscribed to. 
