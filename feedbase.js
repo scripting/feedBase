@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.4.12";     
+var myProductName = "feedBase", myVersion = "0.4.14";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -22,7 +22,11 @@ var config = {
 	flLogToConsole: true,
 	flAllowAccessFromAnywhere: true, //for davehttp
 	s3path: "/scripting.com/code/feedbase/",
-	requestTimeoutSecs: 3
+	requestTimeoutSecs: 3,
+	homepage: {
+		pagetitle: "feedBase"
+		},
+	urlFavicon: "http://scripting.com/favicon.ico"
 	};
 const fnameConfig = "config.json";
 
@@ -31,6 +35,18 @@ var ctFeeds = 0;
 var theSqlConnection = undefined;
 var theSqlConnectionPool = undefined; 
 
+var flOneHitInLastMinute = false;
+
+
+function processHomepageText (s) { //2/1/18 by DW
+	var pagetable = new Object (), pagetext;
+	utils.copyScalars (config.homepage, pagetable);
+	pagetable.productName = myProductName;
+	pagetable.version = myVersion;
+	console.log ("processHomepageText: pagetable == " + utils.jsonStringify (pagetable));
+	pagetext = utils.multipleReplaceAll (s, pagetable, false, "[%", "%]");
+	return (pagetext);
+	}
 function formatDateTime (when) {
 	if (when === undefined) {
 		when = new Date ();
@@ -187,6 +203,14 @@ function getUserOpmlSubscriptions (username, callback) {
 			});
 		});
 	}
+function getFeedInfoFromDatabase (feedUrl, callback) { //as opposed to getting it from the feed itself
+	var sqltext = "SELECT * FROM feeds WHERE feedurl=" + encode (feedUrl) + ";";
+	console.log ("getFeedInfoFromDatabase: sqltext == " + sqltext);
+	runSqltext (sqltext, function (result) {
+		callback (result);
+		});
+	}
+
 
 function readFeed (feedUrl, callback) {
 	try {
@@ -401,6 +425,8 @@ function handleHttpRequest (theRequest) {
 	var token = (theRequest.params.oauth_token !== undefined) ? theRequest.params.oauth_token : undefined;
 	var secret = (theRequest.params.oauth_token_secret !== undefined) ? theRequest.params.oauth_token_secret : undefined;
 	
+	flOneHitInLastMinute = true;
+	
 	function returnPlainText (s) {
 		theRequest.httpReturn (200, "text/plain", s.toString ());
 		}
@@ -430,17 +456,20 @@ function handleHttpRequest (theRequest) {
 			returnData (jstruct);
 			}
 		}
+	function returnRedirect (url, code) {
+		if (code === undefined) {
+			code = 302;
+			}
+		theRequest.httpReturn (code, "text/plain", code + " REDIRECT");
+		}
+		
 	function returnServerHomePage () { //return true if we handled it
 		if (config.urlServerHomePageSource === undefined) {
 			return (false);
 			}
-		request (config.urlServerHomePageSource, function (error, response, templatetext) {
+		request (config.urlServerHomePageSource, function (error, response, pagetext) {
 			if (!error && response.statusCode == 200) {
-				var pagetable = {
-					productName: myProductName,
-					version: myVersion
-					};
-				var pagetext = utils.multipleReplaceAll (templatetext, pagetable, false, "[%", "%]");
+				pagetext = processHomepageText (pagetext);
 				returnHtml (pagetext);
 				}
 			else {
@@ -476,6 +505,11 @@ function handleHttpRequest (theRequest) {
 			return (true); //we handled it
 		case "/hotlist":
 			getHotlist (function (result) {
+				theRequest.httpReturn (200, "application/json", utils.jsonStringify (result));
+				});
+			return (true); //we handled it
+		case "/getfeedinfo":
+			getFeedInfoFromDatabase (theRequest.params.feedurl, function (result) {
 				theRequest.httpReturn (200, "application/json", utils.jsonStringify (result));
 				});
 			return (true); //we handled it
@@ -529,6 +563,9 @@ function handleHttpRequest (theRequest) {
 					}
 				});
 			return (true); //we handled it
+		case "/favicon.ico":
+			returnRedirect (config.urlFavicon);
+			break;
 		}
 	return (false); //we didn't handle it
 	}
@@ -554,6 +591,17 @@ function readConfig (callback) {
 		});
 	}
 
+function everyMinute () {
+	var now = new Date (), timestring = now.toLocaleTimeString ();
+	if (flOneHitInLastMinute) {
+		console.log ("");
+		flOneHitInLastMinute = false;
+		}
+	console.log (myProductName + " v" + myVersion + ": " + timestring + ".\n");
+	readConfig ();
+	}
+function everySecond () {
+	}
 function startup () {
 	console.log ("\n" + myProductName + " v" + myVersion + "\n");
 	readConfig (function () {
@@ -562,6 +610,11 @@ function startup () {
 		
 		config.twitter.httpRequestCallback = handleHttpRequest;
 		davetwitter.start (config.twitter, function () {
+			});
+		setInterval (everySecond, 1000); 
+		utils.runAtTopOfMinute (function () {
+			setInterval (everyMinute, 60000); 
+			everyMinute ();
 			});
 		});
 	}
