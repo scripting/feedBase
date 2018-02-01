@@ -1,3 +1,9 @@
+### 0.4.14 -- 2/1/18 by DW
+
+Added everySecond and everyMinute scripts. 
+
+Read config.json at the top of every minute, so you don't have to restart the app to reconfigure. Not all config options will take effect without a restart, for example HTTP port. 
+
 ### v0.4.12 -- 1/31/18 by DW
 
 There's now a placeholder page at http://feedbase.io/.
