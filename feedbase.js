@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.4.14";     
+var myProductName = "feedBase", myVersion = "0.4.15";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -26,7 +26,8 @@ var config = {
 	homepage: {
 		pagetitle: "feedBase"
 		},
-	urlFavicon: "http://scripting.com/favicon.ico"
+	urlFavicon: "http://scripting.com/favicon.ico",
+	ctSecsHomepageCache: 1 //set it higher for stable production server
 	};
 const fnameConfig = "config.json";
 
@@ -37,12 +38,15 @@ var theSqlConnectionPool = undefined;
 
 var flOneHitInLastMinute = false;
 
+var whenLastHomepageRead = new Date (0), homepageCache = undefined;
+
 
 function processHomepageText (s) { //2/1/18 by DW
 	var pagetable = new Object (), pagetext;
 	utils.copyScalars (config.homepage, pagetable);
 	pagetable.productName = myProductName;
 	pagetable.version = myVersion;
+	pagetable.configJson = utils.jsonStringify (pagetable);
 	console.log ("processHomepageText: pagetable == " + utils.jsonStringify (pagetable));
 	pagetext = utils.multipleReplaceAll (s, pagetable, false, "[%", "%]");
 	return (pagetext);
@@ -149,7 +153,6 @@ function deleteSubscriptions (username, listname, callback) {
 	}
 function getUserSubscriptions (username, callback) {
 	var sqltext = "SELECT s.feedurl, f.title, f.htmlurl FROM subscriptions AS s, feeds AS f WHERE s.feedurl = f.feedurl AND s.username = " + encode (username) + " ORDER BY s.whenupdated DESC;";
-	console.log ("getUserSubscriptions: sqltext == " + sqltext);
 	runSqltext (sqltext, function (result) {
 		callback (result);
 		});
@@ -205,9 +208,18 @@ function getUserOpmlSubscriptions (username, callback) {
 	}
 function getFeedInfoFromDatabase (feedUrl, callback) { //as opposed to getting it from the feed itself
 	var sqltext = "SELECT * FROM feeds WHERE feedurl=" + encode (feedUrl) + ";";
-	console.log ("getFeedInfoFromDatabase: sqltext == " + sqltext);
 	runSqltext (sqltext, function (result) {
 		callback (result);
+		});
+	}
+function getUsersWhoFollowFeed (feedUrl, callback) {
+	var sqltext = "select username from subscriptions where feedurl=" + encode (feedUrl) + ";";
+	runSqltext (sqltext, function (result) {
+		var userarray = new Array ();
+		for (var i = 0; i < result.length; i++) {
+			userarray.push (result [i].username);
+			}
+		callback (userarray);
 		});
 	}
 
@@ -463,21 +475,29 @@ function handleHttpRequest (theRequest) {
 		theRequest.httpReturn (code, "text/plain", code + " REDIRECT");
 		}
 		
+	
 	function returnServerHomePage () { //return true if we handled it
 		if (config.urlServerHomePageSource === undefined) {
 			return (false);
 			}
-		request (config.urlServerHomePageSource, function (error, response, pagetext) {
-			if (!error && response.statusCode == 200) {
-				pagetext = processHomepageText (pagetext);
-				returnHtml (pagetext);
-				}
-			else {
-				returnNotFound ();
-				}
-			});
+		if (utils.secondsSince (whenLastHomepageRead) > config.ctSecsHomepageCache) {
+			request (config.urlServerHomePageSource, function (error, response, pagetext) {
+				if (!error && response.statusCode == 200) {
+					homepageCache = processHomepageText (pagetext);
+					whenLastHomepageRead = new Date ();
+					returnHtml (homepageCache);
+					}
+				else {
+					returnNotFound ();
+					}
+				});
+			}
+		else {
+			returnHtml (homepageCache);
+			}
 		return (true);
 		}
+	
 	function callWithScreenname (callback) {
 		davetwitter.getScreenName (token, secret, function (screenname) {
 			if (screenname === undefined) {
@@ -510,7 +530,12 @@ function handleHttpRequest (theRequest) {
 			return (true); //we handled it
 		case "/getfeedinfo":
 			getFeedInfoFromDatabase (theRequest.params.feedurl, function (result) {
-				theRequest.httpReturn (200, "application/json", utils.jsonStringify (result));
+				returnData (result);
+				});
+			return (true); //we handled it
+		case "/getfollowers":
+			getUsersWhoFollowFeed (theRequest.params.feedurl, function (result) {
+				returnData (result);
 				});
 			return (true); //we handled it
 		case "/knownfeeds":
@@ -547,10 +572,8 @@ function handleHttpRequest (theRequest) {
 				});
 			return (true); //we handled it
 		case "/getsubs":
-			callWithScreenname (function (screenname) {
-				getUserSubscriptions (screenname, function (result) {
-					returnData (result);
-					});
+			getUserSubscriptions (theRequest.params.username, function (result) {
+				returnData (result);
 				});
 			return (true); //we handled it
 		case "/getopmlsubs":
