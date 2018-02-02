@@ -1,3 +1,7 @@
+### 0.4.15 -- 2/2/18 by DW
+
+New calls for getting a user's subscription data and the followers for a given feed. 
+
 ### 0.4.14 -- 2/1/18 by DW
 
 Added everySecond and everyMinute scripts. 
