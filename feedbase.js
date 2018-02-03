@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.4.16";     
+var myProductName = "feedBase", myVersion = "0.4.17";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -84,19 +84,26 @@ function runSqltext (s, callback) {
 		});
 	}
 
+function resetFeedSubCount (feedUrl, callback) { //set the ctSubs column for the indicated feed in the feeds table
+	var sqltext = "SELECT count(*) AS c FROM subscriptions WHERE feedurl=" + encode (feedUrl);
+	runSqltext (sqltext, function (resultCount) {
+		var firstLine = resultCount [0];
+		sqltext = "UPDATE feeds SET countSubs = " + firstLine.c + " WHERE feedurl = " + encode (feedUrl);
+		runSqltext (sqltext, function (resultUpdate) {
+			if (callback !== undefined) {
+				callback (resultUpdate);
+				}
+			});
+		});
+	}
 function addSubscriptionToDatabase (username, listname, feedurl, callback) {
 	var now = formatDateTime (new Date ());
 	var sqltext = "REPLACE INTO subscriptions (username, listname, feedurl, whenupdated) VALUES (" + encode (username) + ", " + encode (listname) + ", " + encode (feedurl) + ", " + encode (now) + ");";
 	runSqltext (sqltext, function (result) {
-		var getCountSQL = "SELECT count(*) AS c FROM subscriptions WHERE feedurl=" + encode (feedurl);
-		runSqltext (getCountSQL, function (resultCount) {
-			var firstLine = resultCount [0];
-			var updateCountSQL = "UPDATE feeds SET countSubs = " + firstLine.c + " WHERE feedurl = " + encode (feedurl);
-			runSqltext (updateCountSQL, function (resultUpdate) {
-				if (callback !== undefined) {
-					callback (result);
-					}
-				});
+		resetFeedSubCount (feedurl, function (resetResult) {
+			if (callback !== undefined) {
+				callback (result);
+				}
 			});
 		});
 	}
@@ -159,7 +166,7 @@ function deleteSubscriptions (username, listname, callback) {
 		});
 	}
 function getUserSubscriptions (username, callback) {
-	var sqltext = "SELECT s.feedurl, f.title, f.htmlurl FROM subscriptions AS s, feeds AS f WHERE s.feedurl = f.feedurl AND s.username = " + encode (username) + " ORDER BY s.whenupdated DESC;";
+	var sqltext = "SELECT s.feedurl, f.title, f.htmlurl, f.countSubs FROM subscriptions AS s, feeds AS f WHERE s.feedurl = f.feedurl AND s.username = " + encode (username) + " ORDER BY s.whenupdated DESC;";
 	runSqltext (sqltext, function (result) {
 		callback (result);
 		});
@@ -227,6 +234,25 @@ function getUsersWhoFollowFeed (feedUrl, callback) {
 			userarray.push (result [i].username);
 			}
 		callback (userarray);
+		});
+	}
+
+
+function resetAllSubCounts (callback) {
+	getKnownFeeds (function (theFeeds) {
+		function doNextFeed (ix) {
+			if (ix < theFeeds.length) {
+				resetFeedSubCount (theFeeds [ix], function () {
+					doNextFeed (ix + 1);
+					});
+				}
+			else {
+				if (callback !== undefined) {
+					callback ();
+					}
+				}
+			}
+		doNextFeed (0);
 		});
 	}
 
@@ -317,6 +343,7 @@ function importOpmlFiles (callback) { //imports outlines from the previous versi
 	function loadUserFolder (username) {
 		var userfolder = config.outlineImportFolder + username;
 		if (isFolder (userfolder)) {
+			console.log (userfolder);
 			fs.readdir (userfolder, function (err, filelist) {
 				if (err) {
 					console.log ("importOpmlFiles: err.message == " + err.message);
@@ -646,6 +673,10 @@ function startup () {
 			setInterval (everyMinute, 60000); 
 			everyMinute ();
 			});
+		
+		
+		
+		resetAllSubCounts ();
 		});
 	}
 startup ();
