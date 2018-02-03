@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.4.15";     
+var myProductName = "feedBase", myVersion = "0.4.16";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -88,9 +88,16 @@ function addSubscriptionToDatabase (username, listname, feedurl, callback) {
 	var now = formatDateTime (new Date ());
 	var sqltext = "REPLACE INTO subscriptions (username, listname, feedurl, whenupdated) VALUES (" + encode (username) + ", " + encode (listname) + ", " + encode (feedurl) + ", " + encode (now) + ");";
 	runSqltext (sqltext, function (result) {
-		if (callback !== undefined) {
-			callback (result);
-			}
+		var getCountSQL = "SELECT count(*) AS c FROM subscriptions WHERE feedurl=" + encode (feedurl);
+		runSqltext (getCountSQL, function (resultCount) {
+			var firstLine = resultCount [0];
+			var updateCountSQL = "UPDATE feeds SET countSubs = " + firstLine.c + " WHERE feedurl = " + encode (feedurl);
+			runSqltext (updateCountSQL, function (resultUpdate) {
+				if (callback !== undefined) {
+					callback (result);
+					}
+				});
+			});
 		});
 	}
 function addFeedToDatabase (feedUrl, callback) {
@@ -209,7 +216,7 @@ function getUserOpmlSubscriptions (username, callback) {
 function getFeedInfoFromDatabase (feedUrl, callback) { //as opposed to getting it from the feed itself
 	var sqltext = "SELECT * FROM feeds WHERE feedurl=" + encode (feedUrl) + ";";
 	runSqltext (sqltext, function (result) {
-		callback (result);
+		callback (result [0]);
 		});
 	}
 function getUsersWhoFollowFeed (feedUrl, callback) {
