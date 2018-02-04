@@ -17,8 +17,9 @@ var config = {
 	urlServerHomePageSource: undefined,
 	outlineImportFolder: "outlines/",
 	usersFolder: "users/",
-	fnamePrefs: "prefs.json",
+	fnamePrefs: "prefs.json", //each user's prefs file
 	fnameOpml: "subs.opml",
+	fnameStats: "data/stats.json", //stats for the app
 	port: 1405,
 	flLogToConsole: true,
 	flAllowAccessFromAnywhere: true, //for davehttp
@@ -33,8 +34,12 @@ var config = {
 const fnameConfig = "config.json";
 
 var stats = {
-	whenLastFeedUpdate: new Date ()
+	ctFeedUpdates: 0,
+	whenLastFeedUpdate: new Date (),
+	lastFeedUpdate: {
+		}
 	};
+var flStatsChanged = false;
 
 
 var theSqlConnectionPool = undefined; 
@@ -44,6 +49,9 @@ var flOneHitInLastMinute = false;
 var whenLastHomepageRead = new Date (0), homepageCache = undefined;
 
 
+function statsChanged () {
+	flStatsChanged = true;
+	}
 function processHomepageText (s) { //2/1/18 by DW
 	var pagetable = new Object (), pagetext;
 	utils.copyScalars (config.homepage, pagetable);
@@ -135,9 +143,10 @@ function addFeedToDatabase (feedUrl, callback) {
 			code: 200,
 			ctsecs: utils.secondsSince (whenstart)
 			};
+		
 		function updateRecord (values, callback) {
 			var sqltext = "replace into feeds " + encodeValues (values);
-			console.log ("Updating info for this feed: values == " + utils.jsonStringify (values));
+			stats.lastFeedUpdate = values;
 			runSqltext (sqltext, function (result) {
 				resetFeedSubCount (feedUrl, callback);
 				});
@@ -278,7 +287,6 @@ function updateLeastRecentlyUpdatedFeed (callback) {
 		});
 	}
 
-
 function resetAllSubCounts (callback) {
 	getKnownFeeds (function (theFeeds) {
 		function doNextFeed (ix) {
@@ -296,7 +304,6 @@ function resetAllSubCounts (callback) {
 		doNextFeed (0);
 		});
 	}
-
 
 function readFeed (feedUrl, callback) {
 	try {
@@ -603,6 +610,9 @@ function handleHttpRequest (theRequest) {
 				theRequest.httpReturn (200, "application/json", utils.jsonStringify (result));
 				});
 			return (true); //we handled it
+		case "/stats":
+			returnData (stats);
+			return (true); //we handled it
 		case "/getfeedinfo":
 			getFeedInfoFromDatabase (theRequest.params.feedurl, function (result) {
 				returnData (result);
@@ -688,6 +698,34 @@ function readConfig (callback) {
 			});
 		});
 	}
+function readStats (callback) {
+	utils.sureFilePath (config.fnameStats, function () {
+		fs.readFile (config.fnameStats, function (err, data) {
+			if (!err) {
+				try {
+					var jstruct = JSON.parse (data.toString ());
+					for (var x in jstruct) {
+						stats [x] = jstruct [x];
+						}
+					}
+				catch (err) {
+					}
+				}
+			if (callback !== undefined) {
+				callback ();
+				}
+			});
+		});
+	}
+function writeStats (callback) {
+	utils.sureFilePath (config.fnameStats, function () {
+		fs.writeFile (config.fnameStats, utils.jsonStringify (stats), function (err) {
+			if (callback !== undefined) {
+				callback ();
+				}
+			});
+		});
+	}
 
 function everyMinute () {
 	var now = new Date (), timestring = now.toLocaleTimeString ();
@@ -701,27 +739,36 @@ function everyMinute () {
 function everySecond () {
 	if (utils.secondsSince (stats.whenLastFeedUpdate) > config.ctSecsBetwFeedUpdates) {
 		stats.whenLastFeedUpdate = new Date ();
-		updateLeastRecentlyUpdatedFeed ();
+		updateLeastRecentlyUpdatedFeed (function () {
+			stats.ctFeedUpdates++;
+			statsChanged ();
+			});
+		}
+	if (flStatsChanged) {
+		flStatsChanged = false;
+		writeStats ();
 		}
 	}
 function startup () {
 	console.log ("\n" + myProductName + " v" + myVersion + "\n");
-	readConfig (function () {
-		console.log ("config == " + utils.jsonStringify (config));
-		theSqlConnectionPool = mysql.createPool (config.database);
-		
-		config.twitter.httpRequestCallback = handleHttpRequest;
-		davetwitter.start (config.twitter, function () {
+	readStats (function () {
+		readConfig (function () {
+			console.log ("config == " + utils.jsonStringify (config));
+			theSqlConnectionPool = mysql.createPool (config.database);
+			
+			config.twitter.httpRequestCallback = handleHttpRequest;
+			davetwitter.start (config.twitter, function () {
+				});
+			setInterval (everySecond, 1000); 
+			utils.runAtTopOfMinute (function () {
+				setInterval (everyMinute, 60000); 
+				everyMinute ();
+				});
+			
+			
+			
+			
 			});
-		setInterval (everySecond, 1000); 
-		utils.runAtTopOfMinute (function () {
-			setInterval (everyMinute, 60000); 
-			everyMinute ();
-			});
-		
-		
-		
-		
 		});
 	}
 startup ();
