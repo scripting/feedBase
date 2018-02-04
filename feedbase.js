@@ -132,6 +132,7 @@ function addFeedToDatabase (feedUrl, callback) {
 		var values = {
 			feedurl: feedUrl,
 			whenupdated: formatDateTime (whenstart),
+			code: 200,
 			ctsecs: utils.secondsSince (whenstart)
 			};
 		function updateRecord (values, callback) {
@@ -145,19 +146,15 @@ function addFeedToDatabase (feedUrl, callback) {
 			values.title = info.title;
 			values.htmlurl = info.htmlUrl;
 			values.description = info.description;
-			values.code = 200;
 			updateRecord (values, callback);
 			}
 		else {
 			if (httpResponse !== undefined) { //2/4/18 by DW
-				values.code = httpResponse.statusCode;
-				updateRecord (values, callback);
-				}
-			else {
-				if (callback !== undefined) {
-					callback (undefined);
+				if (httpResponse.statusCode !== undefined) {
+					values.code = httpResponse.statusCode;
 					}
 				}
+			updateRecord (values, callback); //always update feed so whenupdated value changes
 			}
 		});
 	}
