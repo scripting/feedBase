@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.4.17";     
+var myProductName = "feedBase", myVersion = "0.4.18";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -13,6 +13,7 @@ const davetwitter = require ("davetwitter");
 var feedParser = require ("feedparser");
 
 var config = {
+	ctSecsBetwFeedUpdates: 5,
 	urlServerHomePageSource: undefined,
 	outlineImportFolder: "outlines/",
 	usersFolder: "users/",
@@ -31,9 +32,11 @@ var config = {
 	};
 const fnameConfig = "config.json";
 
-var ctFeeds = 0;
+var stats = {
+	whenLastFeedUpdate: new Date ()
+	};
 
-var theSqlConnection = undefined;
+
 var theSqlConnectionPool = undefined; 
 
 var flOneHitInLastMinute = false;
@@ -59,6 +62,22 @@ function formatDateTime (when) {
 	}
 function encode (s) {
 	return (mysql.escape (s));
+	}
+function encodeValues (values) {
+	var part1 = "", part2 = "";
+	for (var x in values) { //generate something like this: (feedurl, title, htmlurl, description, whenupdated)
+		if (part1.length > 0) {
+			part1 += ", ";
+			}
+		part1 += x;
+		}
+	for (var x in values) { //and this: ('http://scripting.com/rss.xml', Scripting News', 'http://scripting.com/', 'Even worse etc', '2018-02-04 12:04:08')
+		if (part2.length > 0) {
+			part2 += ", ";
+			}
+		part2 += encode (values [x]);
+		}
+	return ("(" + part1 + ") values (" + part2 + ");");
 	}
 function runSqltext (s, callback) {
 	theSqlConnectionPool.getConnection (function (err, connection) {
@@ -108,25 +127,39 @@ function addSubscriptionToDatabase (username, listname, feedurl, callback) {
 		});
 	}
 function addFeedToDatabase (feedUrl, callback) {
-	console.log ("addFeedToDatabase: feedUrl == " + feedUrl);
-	getFeedInfo (feedUrl, function (info) {
-		if (info !== undefined) {
-			var now = formatDateTime (new Date ());
-			var sqltext = "REPLACE INTO feeds (feedurl, title, htmlurl, description, whenupdated) VALUES (" + encode (feedUrl) + ", " + encode (info.title) + ", " + encode (info.htmlUrl) + ", " + encode (info.description) + ", "+ encode (now) + ");";
-			console.log (sqltext);
+	var whenstart = new Date ();
+	getFeedInfo (feedUrl, function (info, httpResponse) {
+		var values = {
+			feedurl: feedUrl,
+			whenupdated: formatDateTime (whenstart),
+			ctsecs: utils.secondsSince (whenstart)
+			};
+		function updateRecord (values, callback) {
+			var sqltext = "replace into feeds " + encodeValues (values);
+			console.log ("Updating info for this feed: values == " + utils.jsonStringify (values));
 			runSqltext (sqltext, function (result) {
-				if (callback !== undefined) {
-					callback (result);
-					}
+				resetFeedSubCount (feedUrl, callback);
 				});
 			}
+		if (info !== undefined) {
+			values.title = info.title;
+			values.htmlurl = info.htmlUrl;
+			values.description = info.description;
+			values.code = 200;
+			updateRecord (values, callback);
+			}
 		else {
-			if (callback !== undefined) {
-				callback (undefined);
+			if (httpResponse !== undefined) { //2/4/18 by DW
+				values.code = httpResponse.statusCode;
+				updateRecord (values, callback);
+				}
+			else {
+				if (callback !== undefined) {
+					callback (undefined);
+					}
 				}
 			}
 		});
-	
 	}
 function getHotlist (callback) {
 	const sqltext = "SELECT subscriptions.feedurl, feeds.title, feeds.htmlurl, COUNT(subscriptions.feedurl) AS countSubs FROM subscriptions, feeds WHERE subscriptions.feedurl = feeds.feedurl GROUP BY feedurl ORDER BY countSubs DESC LIMIT 100;";
@@ -236,6 +269,17 @@ function getUsersWhoFollowFeed (feedUrl, callback) {
 		callback (userarray);
 		});
 	}
+function updateLeastRecentlyUpdatedFeed (callback) {
+	var sqltext = "SELECT * FROM feeds ORDER BY whenupdated ASC LIMIT 1;";
+	runSqltext (sqltext, function (result) {
+		var theFeed = result [0];
+		addFeedToDatabase (theFeed.feedurl, function (addResult) {
+			if (callback !== undefined) {
+				callback (result);
+				}
+			});
+		});
+	}
 
 
 function resetAllSubCounts (callback) {
@@ -273,12 +317,12 @@ function readFeed (feedUrl, callback) {
 				}
 			else {
 				console.log ("readFeed: response.statusCode == " + response.statusCode);
-				callback (undefined);
+				callback (undefined, response);
 				}
 			});
 		req.on ("error", function (response) {
 			console.log ("readFeed: response.statusCode == " + response.statusCode);
-			callback (undefined);
+			callback (undefined, response);
 			});
 		feedparser.on ("readable", function () {
 			try {
@@ -303,9 +347,9 @@ function readFeed (feedUrl, callback) {
 		}
 	}
 function getFeedInfo (feedUrl, callback) {
-	readFeed (feedUrl, function (feedItems) {
+	readFeed (feedUrl, function (feedItems, httpResponse) {
 		if ((feedItems === undefined) || (feedItems.length == 0)) {
-			callback (undefined);
+			callback (undefined, httpResponse);
 			}
 		else {
 			var item = feedItems [0];
@@ -658,6 +702,10 @@ function everyMinute () {
 	readConfig ();
 	}
 function everySecond () {
+	if (utils.secondsSince (stats.whenLastFeedUpdate) > config.ctSecsBetwFeedUpdates) {
+		stats.whenLastFeedUpdate = new Date ();
+		updateLeastRecentlyUpdatedFeed ();
+		}
 	}
 function startup () {
 	console.log ("\n" + myProductName + " v" + myVersion + "\n");
@@ -676,7 +724,7 @@ function startup () {
 		
 		
 		
-		resetAllSubCounts ();
+		
 		});
 	}
 startup ();
