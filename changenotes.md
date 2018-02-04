@@ -1,3 +1,11 @@
+### 0.4.18 -- 2/4/18 by DW
+
+Sorry I've been slacking off on the change notes. Getting back on the wagon.
+
+Big change in this release -- we're now regularly updating the info we have about the feeds, one update every five seconds. That's of course configurable. We may need to decrease it, or rely on River5 to do this for us. For now this seems like enough.
+
+Added two new columns to the feeds table: code and ctsecs, which are the HTTP code for the most recent request, and ctsecs the number of seconds, as a floating point number, that the request took. I want to add more info, the number of reads, number of consecutive errors. It's a beginning of helping spot feeds that are broken or no longer updating. Certainly something feedBase should track.
+
 ### 0.4.15 -- 2/2/18 by DW
 
 New calls for getting a user's subscription data and the followers for a given feed. 
