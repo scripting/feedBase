@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.4.20";     
+var myProductName = "feedBase", myVersion = "0.4.21";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -34,8 +34,18 @@ var config = {
 const fnameConfig = "config.json";
 
 var stats = {
+	ctHits: 0,
+	ctHitsToday: 0,
+	ctHitsThisRun: 0,
+	whenLastHit: new Date (),
+	
 	ctFeedUpdates: 0,
+	ctFeedUpdatesToday: 0,
+	ctFeedUpdatesThisRun: 0,
 	whenLastFeedUpdate: new Date (),
+	
+	whenLastDayRollover: new Date (),
+	
 	lastFeedUpdate: {
 		}
 	};
@@ -467,6 +477,19 @@ function processOpmlFile (f, screenname, callback) { //what we do when the user 
 			}
 		});
 	}
+function subscribe (screenname, feedUrl, callback) {
+	addSubscriptionToDatabase (screenname, null, feedUrl, callback);
+	}
+function isSubscribed (screenname, feedUrl, callback) {
+	getUserSubscriptions (screenname, function (subs) {
+		for (var i = 0; i < subs.length; i++) {
+			if (subs [i].feedurl == feedUrl) {
+				callback (true);
+				}
+			}
+		callback (false);
+		});
+	}
 
 function getInitialOpmlText (title) {
 	var s = 
@@ -544,6 +567,11 @@ function handleHttpRequest (theRequest) {
 	var secret = (theRequest.params.oauth_token_secret !== undefined) ? theRequest.params.oauth_token_secret : undefined;
 	
 	flOneHitInLastMinute = true;
+	
+	stats.ctHits++;
+	stats.ctHitsToday++;
+	stats.ctHitsThisRun++;
+	stats.whenLastHit = new Date ();
 	
 	function returnPlainText (s) {
 		theRequest.httpReturn (200, "text/plain", s.toString ());
@@ -650,6 +678,20 @@ function handleHttpRequest (theRequest) {
 		case "/knownfeeds":
 			getKnownFeeds (function (result) {
 				theRequest.httpReturn (200, "application/json", utils.jsonStringify (result));
+				});
+			return (true); //we handled it
+		case "/subscribe":
+			callWithScreenname (function (screenname) {
+				subscribe (screenname, theRequest.params.feedurl, function (result) {
+					returnData (result);
+					});
+				});
+			return (true); //we handled it
+		case "/issubscribed":
+			callWithScreenname (function (screenname) {
+				isSubscribed (screenname, theRequest.params.feedurl, function (result) {
+					returnData (result);
+					});
 				});
 			return (true); //we handled it
 		case "/getprefs":
@@ -759,12 +801,20 @@ function everyMinute () {
 		}
 	console.log (myProductName + " v" + myVersion + ": " + timestring + ".\n");
 	readConfig ();
+	if (!utils.sameDay (stats.whenLastDayRollover, now)) { //date rollover
+		stats.whenLastDayRollover = now;
+		stats.ctFeedUpdatesToday = 0;
+		stats.ctHitsToday = 0;
+		statsChanged ();
+		}
 	}
 function everySecond () {
 	if (utils.secondsSince (stats.whenLastFeedUpdate) > config.ctSecsBetwFeedUpdates) {
 		stats.whenLastFeedUpdate = new Date ();
 		updateLeastRecentlyUpdatedFeed (function () {
 			stats.ctFeedUpdates++;
+			stats.ctFeedUpdatesToday++;
+			stats.ctFeedUpdatesThisRun++;
 			statsChanged ();
 			});
 		}
@@ -776,6 +826,10 @@ function everySecond () {
 function startup () {
 	console.log ("\n" + myProductName + " v" + myVersion + "\n");
 	readStats (function () {
+		stats.ctHitsThisRun = 0;
+		stats.ctFeedUpdatesThisRun = 0;
+		stats.whenLastStartup = new Date ();
+		statsChanged ();
 		readConfig (function () {
 			console.log ("config == " + utils.jsonStringify (config));
 			theSqlConnectionPool = mysql.createPool (config.database);
