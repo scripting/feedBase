@@ -34,6 +34,8 @@ var config = {
 const fnameConfig = "config.json";
 
 var stats = {
+	ctStartups: 0,
+	whenLastStartup: new Date (),
 	ctHits: 0,
 	ctHitsToday: 0,
 	ctHitsThisRun: 0,
@@ -826,9 +828,10 @@ function everySecond () {
 function startup () {
 	console.log ("\n" + myProductName + " v" + myVersion + "\n");
 	readStats (function () {
+		stats.whenLastStartup = new Date ();
+		stats.ctStartups++;
 		stats.ctHitsThisRun = 0;
 		stats.ctFeedUpdatesThisRun = 0;
-		stats.whenLastStartup = new Date ();
 		statsChanged ();
 		readConfig (function () {
 			console.log ("config == " + utils.jsonStringify (config));
@@ -842,9 +845,6 @@ function startup () {
 				setInterval (everyMinute, 60000); 
 				everyMinute ();
 				});
-			
-			
-			
 			
 			});
 		});
