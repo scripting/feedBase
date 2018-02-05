@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.4.18";     
+var myProductName = "feedBase", myVersion = "0.4.19";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -136,35 +136,42 @@ function addSubscriptionToDatabase (username, listname, feedurl, callback) {
 	}
 function addFeedToDatabase (feedUrl, callback) {
 	var whenstart = new Date ();
-	getFeedInfo (feedUrl, function (info, httpResponse) {
-		var values = {
-			feedurl: feedUrl,
-			whenupdated: formatDateTime (whenstart),
-			code: 200,
-			ctsecs: utils.secondsSince (whenstart)
-			};
-		
-		function updateRecord (values, callback) {
-			var sqltext = "replace into feeds " + encodeValues (values);
-			stats.lastFeedUpdate = values;
-			runSqltext (sqltext, function (result) {
-				resetFeedSubCount (feedUrl, callback);
-				});
-			}
-		if (info !== undefined) {
-			values.title = info.title;
-			values.htmlurl = info.htmlUrl;
-			values.description = info.description;
-			updateRecord (values, callback);
-			}
-		else {
-			if (httpResponse !== undefined) { //2/4/18 by DW
-				if (httpResponse.statusCode !== undefined) {
-					values.code = httpResponse.statusCode;
-					}
+	getFeedInfoFromDatabase (feedUrl, function (values) {
+		getFeedInfo (feedUrl, function (info, httpResponse) { //gets the info from the feed, on the net
+			values.whenupdated = formatDateTime (whenstart);
+			values.code = 200;
+			values.ctSecs = utils.secondsSince (whenstart);
+			if (values.ctsecs !== undefined) {
+				delete values.ctsecs;
 				}
-			updateRecord (values, callback); //always update feed so whenupdated value changes
-			}
+			values.ctChecks++;
+			
+			function updateRecord (values, callback) {
+				var sqltext = "replace into feeds " + encodeValues (values);
+				stats.lastFeedUpdate = values;
+				runSqltext (sqltext, function (result) {
+					resetFeedSubCount (feedUrl, callback);
+					});
+				}
+			if (info !== undefined) {
+				values.title = info.title;
+				values.htmlurl = info.htmlUrl;
+				values.description = info.description;
+				values.ctConsecutiveErrors = 0;
+				updateRecord (values, callback);
+				}
+			else {
+				values.ctErrors++;
+				values.ctConsecutiveErrors++;
+				values.whenLastError = values.whenupdated;
+				if (httpResponse !== undefined) { //2/4/18 by DW
+					if (httpResponse.statusCode !== undefined) {
+						values.code = httpResponse.statusCode;
+						}
+					}
+				updateRecord (values, callback); //always update feed so whenupdated value changes
+				}
+			});
 		});
 	}
 function getHotlist (callback) {
@@ -279,6 +286,7 @@ function updateLeastRecentlyUpdatedFeed (callback) {
 	var sqltext = "SELECT * FROM feeds ORDER BY whenupdated ASC LIMIT 1;";
 	runSqltext (sqltext, function (result) {
 		var theFeed = result [0];
+		console.log ("Updating theFeed.feedurl == " + theFeed.feedurl + ", theFeed.whenupdated == " + (utils.secondsSince (theFeed.whenupdated) / 3600).toFixed (2) + " hours.");
 		addFeedToDatabase (theFeed.feedurl, function (addResult) {
 			if (callback !== undefined) {
 				callback (result);
@@ -320,7 +328,7 @@ function readFeed (feedUrl, callback) {
 				stream.pipe (feedparser);
 				}
 			else {
-				console.log ("readFeed: response.statusCode == " + response.statusCode);
+				console.log ("readFeed: response.statusCode == " + response.statusCode + ", feedUrl == " + feedUrl);
 				callback (undefined, response);
 				}
 			});
