@@ -2,10 +2,11 @@
 	"name": "feedbase",
 	"description": "Let's get some feeds into a database.",
 	"author": "Dave Winer <dave@smallpicture.com>",
-	"version": "0.4.19",
+	"version": "0.4.20",
 	"dependencies" : {
 		"mysql": "*",
 		"request": "*",
+		"crypto": "*", 
 		"feedparser": "*",
 		"dateformat": "*",
 		"daveutils": "*",

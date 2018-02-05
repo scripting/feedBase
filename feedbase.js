@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.4.19";     
+var myProductName = "feedBase", myVersion = "0.4.20";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -10,25 +10,25 @@ const s3 = require ("daves3");
 const folderloader = require ("s3folderloader");
 const davehttp = require ("davehttp"); 
 const davetwitter = require ("davetwitter");
-var feedParser = require ("feedparser");
+const feedParser = require ("feedparser");
+const crypto = require ("crypto");
 
 var config = {
-	ctSecsBetwFeedUpdates: 5,
-	urlServerHomePageSource: undefined,
+	ctSecsBetwFeedUpdates: 15,
 	outlineImportFolder: "outlines/",
 	usersFolder: "users/",
 	fnamePrefs: "prefs.json", //each user's prefs file
 	fnameOpml: "subs.opml",
 	fnameStats: "data/stats.json", //stats for the app
-	port: 1405,
-	flLogToConsole: true,
-	flAllowAccessFromAnywhere: true, //for davehttp
+	savedFeedInfoFolder: "data/feeds/",
+	fnameFeedInfo: "feedInfo.json",
 	s3path: "/scripting.com/code/feedbase/",
 	requestTimeoutSecs: 3,
 	homepage: {
 		pagetitle: "feedBase"
 		},
 	urlFavicon: "http://scripting.com/favicon.ico",
+	urlServerHomePageSource: undefined,
 	ctSecsHomepageCache: 1 //set it higher for stable production server
 	};
 const fnameConfig = "config.json";
@@ -41,7 +41,6 @@ var stats = {
 	};
 var flStatsChanged = false;
 
-
 var theSqlConnectionPool = undefined; 
 
 var flOneHitInLastMinute = false;
@@ -49,6 +48,9 @@ var flOneHitInLastMinute = false;
 var whenLastHomepageRead = new Date (0), homepageCache = undefined;
 
 
+function hashMD5 (s) {
+	return (crypto.createHash ("md5").update (s).digest ("hex"));
+	}
 function statsChanged () {
 	flStatsChanged = true;
 	}
@@ -286,11 +288,12 @@ function updateLeastRecentlyUpdatedFeed (callback) {
 	var sqltext = "SELECT * FROM feeds ORDER BY whenupdated ASC LIMIT 1;";
 	runSqltext (sqltext, function (result) {
 		var theFeed = result [0];
-		console.log ("Updating theFeed.feedurl == " + theFeed.feedurl + ", theFeed.whenupdated == " + (utils.secondsSince (theFeed.whenupdated) / 3600).toFixed (2) + " hours.");
 		addFeedToDatabase (theFeed.feedurl, function (addResult) {
-			if (callback !== undefined) {
-				callback (result);
-				}
+			saveFeedInfoJson (theFeed.feedurl, function () {
+				if (callback !== undefined) {
+					callback (result);
+					}
+				});
 			});
 		});
 	}
@@ -372,6 +375,19 @@ function getFeedInfo (feedUrl, callback) {
 				}
 			callback (info);
 			}
+		});
+	}
+
+function saveFeedInfoJson (feedUrl, callback) {
+	getFeedInfoFromDatabase (feedUrl, function (feedInfo) {
+		var f = config.savedFeedInfoFolder + hashMD5 (feedUrl) + "/" + config.fnameFeedInfo;
+		utils.sureFilePath (f, function () {
+			fs.writeFile (f, utils.jsonStringify (feedInfo), function (err) {
+				if (callback !== undefined) {
+					callback ();
+					}
+				});
+			});
 		});
 	}
 
