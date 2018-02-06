@@ -34,6 +34,9 @@ var config = {
 const fnameConfig = "config.json";
 
 var stats = {
+	productName: myProductName,
+	version: myVersion,
+	
 	ctStartups: 0,
 	whenLastStartup: new Date (),
 	ctHits: 0,
@@ -307,6 +310,22 @@ function updateLeastRecentlyUpdatedFeed (callback) {
 					}
 				});
 			});
+		});
+	}
+function updateThisFeed (feedUrl, callback) { //handle a ping call
+	getFeedInfoFromDatabase (feedUrl, function (info) {
+		if (info.feedurl !== undefined) { //it's one of our feeds
+			addFeedToDatabase (feedUrl, function (addResult) {
+				if (callback !== undefined) {
+					callback (info);
+					}
+				});
+			}
+		else {
+			if (callback !== undefined) {
+				callback (info);
+				}
+			}
 		});
 	}
 
@@ -672,6 +691,11 @@ function handleHttpRequest (theRequest) {
 				returnData (result);
 				});
 			return (true); //we handled it
+		case "/ping":
+			updateThisFeed (theRequest.params.feedurl, function (result) {
+				returnData (result);
+				});
+			return (true); //we handled it
 		case "/getfollowers":
 			getUsersWhoFollowFeed (theRequest.params.feedurl, function (result) {
 				returnData (result);
@@ -828,10 +852,12 @@ function everySecond () {
 function startup () {
 	console.log ("\n" + myProductName + " v" + myVersion + "\n");
 	readStats (function () {
+		stats.productName = myProductName;
+		stats.version = myVersion;
 		stats.whenLastStartup = new Date ();
 		stats.ctStartups++;
-		stats.ctHitsThisRun = 0;
 		stats.ctFeedUpdatesThisRun = 0;
+		stats.ctHitsThisRun = 0;
 		statsChanged ();
 		readConfig (function () {
 			console.log ("config == " + utils.jsonStringify (config));
