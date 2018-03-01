@@ -12,8 +12,7 @@
 		"daveutils": "*",
 		"davetwitter": "*",
 		"daveopml": "*",
-		"daves3": "*",
-		"s3folderloader": "*"
+		"daves3": "*"
 		}, 
 	"license": "MIT",
 	"engines": {

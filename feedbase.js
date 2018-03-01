@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.4.21";     
+var myProductName = "feedBase", myVersion = "0.5.2";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -7,7 +7,6 @@ const request = require ("request");
 const opml = require ("daveopml");
 const dateFormat = require ("dateformat");
 const s3 = require ("daves3"); 
-const folderloader = require ("s3folderloader");
 const davehttp = require ("davehttp"); 
 const davetwitter = require ("davetwitter");
 const feedParser = require ("feedparser");
@@ -22,7 +21,9 @@ var config = {
 	fnameStats: "data/stats.json", //stats for the app
 	savedFeedInfoFolder: "data/feeds/",
 	fnameFeedInfo: "feedInfo.json",
-	s3path: "/scripting.com/code/feedbase/",
+	
+	opmlS3path: "/opml.feedbase.io/", //2/28/18 by DW -- where we save each users' OPML file
+	
 	requestTimeoutSecs: 3,
 	homepage: {
 		pagetitle: "feedBase"
@@ -283,6 +284,25 @@ function getUserOpmlSubscriptions (username, callback) {
 			});
 		});
 	}
+
+function uploadUserOpmlToS3 (username, callback) { //2/28/18 by DW
+	getUserOpmlSubscriptions (username, function (err, opmltext) {
+		if (!err) {
+			var path = config.opmlS3path + username + ".opml";
+			s3.newObject (path, opmltext, "text/xml", "public-read", function (err, data) {
+				console.log ("uploadUserOpmlToS3: url == http:/" + path);
+				if (callback !== undefined) {
+					callback ();
+					}
+				});
+			}
+		if (callback !== undefined) {
+			callback ();
+			}
+		});
+	}
+
+
 function getFeedInfoFromDatabase (feedUrl, callback) { //as opposed to getting it from the feed itself
 	var sqltext = "SELECT * FROM feeds WHERE feedurl=" + encode (feedUrl) + ";";
 	runSqltext (sqltext, function (result) {
@@ -670,14 +690,6 @@ function handleHttpRequest (theRequest) {
 		case "/now": 
 			theRequest.httpReturn (200, "text/plain", new Date ());
 			return (true); //we handled it
-		case "/reload":
-			folderloader.load (config.s3path, "./", function (logtext) {
-				if (logtext.length == 0) {
-					logtext = "No changes.";
-					}
-				theRequest.httpReturn (200, "text/html", logtext);
-				});
-			return (true); //we handled it
 		case "/hotlist":
 			getHotlist (function (result) {
 				theRequest.httpReturn (200, "application/json", utils.jsonStringify (result));
@@ -743,8 +755,11 @@ function handleHttpRequest (theRequest) {
 			return (true); //we handled it
 		case "/saveopml":
 			callWithScreenname (function (screenname) {
-				saveUserOpml (screenname, theRequest.params.opmltext, function (err, result) {
-					httpReturn (err, result);
+				console.log ("/saveopml: theRequest.postBody.length == " + theRequest.postBody.length);
+				saveUserOpml (screenname, theRequest.postBody, function (err, result) {
+					uploadUserOpmlToS3 (screenname, function () {
+						httpReturn (err, result);
+						});
 					});
 				});
 			return (true); //we handled it
@@ -864,6 +879,7 @@ function startup () {
 			theSqlConnectionPool = mysql.createPool (config.database);
 			
 			config.twitter.httpRequestCallback = handleHttpRequest;
+			config.twitter.flPostEnabled = true; //3/1/18 by DW
 			davetwitter.start (config.twitter, function () {
 				});
 			setInterval (everySecond, 1000); 
