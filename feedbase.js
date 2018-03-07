@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.5.2";     
+var myProductName = "feedBase", myVersion = "0.5.5";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -14,6 +14,7 @@ const crypto = require ("crypto");
 
 var config = {
 	ctSecsBetwFeedUpdates: 15,
+	minSecsBetwSingleFeedUpdate: 60 * 15, //at least 15 minutes betw checks for each feed
 	outlineImportFolder: "outlines/",
 	usersFolder: "users/",
 	fnamePrefs: "prefs.json", //each user's prefs file
@@ -128,7 +129,6 @@ function runSqltext (s, callback) {
 			}
 		});
 	}
-
 function resetFeedSubCount (feedUrl, callback) { //set the ctSubs column for the indicated feed in the feeds table
 	var sqltext = "SELECT count(*) AS c FROM subscriptions WHERE feedurl=" + encode (feedUrl);
 	runSqltext (sqltext, function (resultCount) {
@@ -154,7 +154,15 @@ function addSubscriptionToDatabase (username, listname, feedurl, callback) {
 	}
 function addFeedToDatabase (feedUrl, callback) {
 	var whenstart = new Date ();
-	getFeedInfoFromDatabase (feedUrl, function (values) {
+	getFeedInfoFromDatabase (feedUrl, function (err, values) {
+		if (err) { //3/7/18 by DW -- it wasn't in the database
+			values = {
+				feedUrl: feedUrl,
+				ctChecks: 0,
+				ctErrors: 0,
+				ctConsecutiveErrors: 0
+				};
+			}
 		getFeedInfo (feedUrl, function (info, httpResponse) { //gets the info from the feed, on the net
 			values.whenupdated = formatDateTime (whenstart);
 			values.code = 200;
@@ -284,7 +292,6 @@ function getUserOpmlSubscriptions (username, callback) {
 			});
 		});
 	}
-
 function uploadUserOpmlToS3 (username, callback) { //2/28/18 by DW
 	getUserOpmlSubscriptions (username, function (err, opmltext) {
 		if (!err) {
@@ -301,12 +308,15 @@ function uploadUserOpmlToS3 (username, callback) { //2/28/18 by DW
 			}
 		});
 	}
-
-
 function getFeedInfoFromDatabase (feedUrl, callback) { //as opposed to getting it from the feed itself
 	var sqltext = "SELECT * FROM feeds WHERE feedurl=" + encode (feedUrl) + ";";
 	runSqltext (sqltext, function (result) {
-		callback (result [0]);
+		if (result.length == 0) {
+			callback ({message: "Can't get the info for the feed \"" + feedUrl + "\" because it is not in the database."});
+			}
+		else {
+			callback (undefined, result [0]);
+			}
 		});
 	}
 function getUsersWhoFollowFeed (feedUrl, callback) {
@@ -322,18 +332,24 @@ function getUsersWhoFollowFeed (feedUrl, callback) {
 function updateLeastRecentlyUpdatedFeed (callback) {
 	var sqltext = "SELECT * FROM feeds ORDER BY whenupdated ASC LIMIT 1;";
 	runSqltext (sqltext, function (result) {
-		var theFeed = result [0];
-		addFeedToDatabase (theFeed.feedurl, function (addResult) {
-			saveFeedInfoJson (theFeed.feedurl, function () {
-				if (callback !== undefined) {
-					callback (result);
-					}
-				});
-			});
+		if (result.length > 0) { //3/7/18 by DW
+			var theFeed = result [0];
+			var secsSinceUpdate = utils.secondsSince (theFeed.whenupdated);
+			if (secsSinceUpdate >= config.minSecsBetwSingleFeedUpdate) {
+				console.log ("Updating info re == " + theFeed.feedurl + ", last updated " + (secsSinceUpdate / 3600).toFixed (2) + " hours ago.");
+				addFeedToDatabase (theFeed.feedurl, function (addResult) {
+					saveFeedInfoJson (theFeed.feedurl, function () {
+						if (callback !== undefined) {
+							callback (result);
+							}
+						});
+					});
+				}
+			}
 		});
 	}
 function updateThisFeed (feedUrl, callback) { //handle a ping call
-	getFeedInfoFromDatabase (feedUrl, function (info) {
+	getFeedInfoFromDatabase (feedUrl, function (err, info) {
 		if (info.feedurl !== undefined) { //it's one of our feeds
 			addFeedToDatabase (feedUrl, function (addResult) {
 				if (callback !== undefined) {
@@ -348,7 +364,6 @@ function updateThisFeed (feedUrl, callback) { //handle a ping call
 			}
 		});
 	}
-
 function resetAllSubCounts (callback) {
 	getKnownFeeds (function (theFeeds) {
 		function doNextFeed (ix) {
@@ -366,7 +381,6 @@ function resetAllSubCounts (callback) {
 		doNextFeed (0);
 		});
 	}
-
 function readFeed (feedUrl, callback) {
 	try {
 		var requestOptions = {
@@ -428,9 +442,8 @@ function getFeedInfo (feedUrl, callback) {
 			}
 		});
 	}
-
 function saveFeedInfoJson (feedUrl, callback) {
-	getFeedInfoFromDatabase (feedUrl, function (feedInfo) {
+	getFeedInfoFromDatabase (feedUrl, function (err, feedInfo) {
 		var f = config.savedFeedInfoFolder + hashMD5 (feedUrl) + "/" + config.fnameFeedInfo;
 		utils.sureFilePath (f, function () {
 			fs.writeFile (f, utils.jsonStringify (feedInfo), function (err) {
@@ -441,7 +454,6 @@ function saveFeedInfoJson (feedUrl, callback) {
 			});
 		});
 	}
-
 function readOpmlSubscriptionList (f, flExpandIncludes, callback) { //read OPML file, parse, call back with a list of feeds contained in the file
 	opml.readOpmlFile (f, function (theOutline) {
 		if (theOutline !== undefined) {
@@ -502,14 +514,28 @@ function importOpmlFiles (callback) { //imports outlines from the previous versi
 		});
 	}
 function processOpmlFile (f, screenname, callback) { //what we do when the user submits an OPML file
+	function dontDeleteSubscriptions (username, listname, callback) { //3/7/18 by DW
+		callback ();
+		}
 	readOpmlSubscriptionList (f, false, function (feedlist) {
 		if (feedlist !== undefined) {
 			var fname = utils.stringLastField (f, "/");
-			deleteSubscriptions (screenname, fname, function (result) {
-				for (var i = 0; i < feedlist.length; i++) {
-					let urlfeed = feedlist [i];
-					addSubscriptionToDatabase (screenname, fname, urlfeed);
+			dontDeleteSubscriptions (screenname, fname, function (result) {
+				console.log ("processOpmlFile: feedlist == " + utils.jsonStringify (feedlist));
+				function doNextFeed (ix) {
+					if (ix < feedlist.length) {
+						var urlfeed = feedlist [ix];
+						addFeedToDatabase (urlfeed, function () {
+							addSubscriptionToDatabase (screenname, fname, urlfeed, function () {
+								doNextFeed (ix + 1);
+								});
+							});
+						}
+					else {
+						callback ();
+						}
 					}
+				doNextFeed (0);
 				});
 			callback (undefined); //no error
 			}
@@ -531,7 +557,6 @@ function isSubscribed (screenname, feedUrl, callback) {
 		callback (false);
 		});
 	}
-
 function getInitialOpmlText (title) {
 	var s = 
 		"<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>\n<opml version=\"2.0\">\n\t<head>\n\t\t<title>[%title%]</title>\n\t\t<dateCreated>[%created%]</dateCreated>\n\t\t<dateModified>[%created%]</dateModified>\n\t\t</head>\n\t<body>\n\t\t<outline text=\"\" created=\"[%created%]\" />\n\t\t</body>\n\t</opml>";
@@ -602,7 +627,6 @@ function savePrefs (screenname, jsontext, callback) {
 			});
 		});
 	}
-
 function handleHttpRequest (theRequest) {
 	var token = (theRequest.params.oauth_token !== undefined) ? theRequest.params.oauth_token : undefined;
 	var secret = (theRequest.params.oauth_token_secret !== undefined) ? theRequest.params.oauth_token_secret : undefined;
@@ -699,8 +723,13 @@ function handleHttpRequest (theRequest) {
 			returnData (stats);
 			return (true); //we handled it
 		case "/getfeedinfo":
-			getFeedInfoFromDatabase (theRequest.params.feedurl, function (result) {
-				returnData (result);
+			getFeedInfoFromDatabase (theRequest.params.feedurl, function (err, result) {
+				httpReturn (err, result);
+				});
+			return (true); //we handled it
+		case "/readfeed": //3/7/18 by DW
+			getFeedInfo (theRequest.params.feedurl, function (err, result) {
+				httpReturn (err, result);
 				});
 			return (true); //we handled it
 		case "/ping":
@@ -784,7 +813,6 @@ function handleHttpRequest (theRequest) {
 		}
 	return (false); //we didn't handle it
 	}
-
 function readConfig (callback) {
 	utils.sureFilePath (fnameConfig, function () {
 		fs.readFile (fnameConfig, function (err, data) {
@@ -833,7 +861,6 @@ function writeStats (callback) {
 			});
 		});
 	}
-
 function everyMinute () {
 	var now = new Date (), timestring = now.toLocaleTimeString ();
 	if (flOneHitInLastMinute) {
