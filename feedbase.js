@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.5.5";     
+var myProductName = "feedBase", myVersion = "0.5.6";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -24,6 +24,7 @@ var config = {
 	fnameFeedInfo: "feedInfo.json",
 	
 	opmlS3path: "/opml.feedbase.io/", //2/28/18 by DW -- where we save each users' OPML file
+	opmlS3url: "http://opml.feedbase.io/",
 	
 	requestTimeoutSecs: 3,
 	homepage: {
@@ -295,16 +296,21 @@ function getUserOpmlSubscriptions (username, callback) {
 function uploadUserOpmlToS3 (username, callback) { //2/28/18 by DW
 	getUserOpmlSubscriptions (username, function (err, opmltext) {
 		if (!err) {
-			var path = config.opmlS3path + username + ".opml";
+			var fname = username + ".opml";
+			var path = config.opmlS3path + fname;
 			s3.newObject (path, opmltext, "text/xml", "public-read", function (err, data) {
-				console.log ("uploadUserOpmlToS3: url == http:/" + path);
 				if (callback !== undefined) {
-					callback ();
+					var jstruct = {
+						opmlUrl: config.opmlS3url + fname
+						};
+					callback (undefined, jstruct);
 					}
 				});
 			}
-		if (callback !== undefined) {
-			callback ();
+		else {
+			if (callback !== undefined) {
+				callback ();
+				}
 			}
 		});
 	}
@@ -336,7 +342,7 @@ function updateLeastRecentlyUpdatedFeed (callback) {
 			var theFeed = result [0];
 			var secsSinceUpdate = utils.secondsSince (theFeed.whenupdated);
 			if (secsSinceUpdate >= config.minSecsBetwSingleFeedUpdate) {
-				console.log ("Updating info re == " + theFeed.feedurl + ", last updated " + (secsSinceUpdate / 3600).toFixed (2) + " hours ago.");
+				console.log ("Updating " + theFeed.feedurl + ", last updated " + (secsSinceUpdate / 3600).toFixed (2) + " hours ago.");
 				addFeedToDatabase (theFeed.feedurl, function (addResult) {
 					saveFeedInfoJson (theFeed.feedurl, function () {
 						if (callback !== undefined) {
@@ -524,20 +530,24 @@ function processOpmlFile (f, screenname, callback) { //what we do when the user 
 				console.log ("processOpmlFile: feedlist == " + utils.jsonStringify (feedlist));
 				function doNextFeed (ix) {
 					if (ix < feedlist.length) {
-						var urlfeed = feedlist [ix];
-						addFeedToDatabase (urlfeed, function () {
-							addSubscriptionToDatabase (screenname, fname, urlfeed, function () {
+						var feedUrl = feedlist [ix];
+						getFeedInfoFromDatabase (feedUrl, function (err, info) {
+							if (err) { //not in database
+								addFeedToDatabase (feedUrl, function (addResult) {
+									doNextFeed (ix + 1);
+									});
+								}
+							else {
 								doNextFeed (ix + 1);
-								});
+								}
 							});
 						}
 					else {
-						callback ();
+						callback (undefined); //no error
 						}
 					}
 				doNextFeed (0);
 				});
-			callback (undefined); //no error
 			}
 		else {
 			callback ({message: "Can't process the subscription list because it is not a valid OPML file."});
@@ -786,7 +796,7 @@ function handleHttpRequest (theRequest) {
 			callWithScreenname (function (screenname) {
 				console.log ("/saveopml: theRequest.postBody.length == " + theRequest.postBody.length);
 				saveUserOpml (screenname, theRequest.postBody, function (err, result) {
-					uploadUserOpmlToS3 (screenname, function () {
+					uploadUserOpmlToS3 (screenname, function (err, result) {
 						httpReturn (err, result);
 						});
 					});
