@@ -1,3 +1,11 @@
+### 0.5.8 -- 3/10/18 by DW
+
+There have been lots of changes, unfortunately not recorded. 
+
+A death in the family caused a serious pause in development work on feedBase. 
+
+I am back in the flow, mostly, and will attempt to resume the change notes. 
+
 ### 0.4.18 -- 2/4/18 by DW
 
 Sorry I've been slacking off on the change notes. Getting back on the wagon.
