@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.5.8";     
+var myProductName = "feedBase", myVersion = "0.5.9";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -579,6 +579,12 @@ function importOpmlFiles (callback) { //imports outlines from the previous versi
 function subscribe (screenname, feedUrl, callback) {
 	addSubscriptionToDatabase (screenname, null, feedUrl, callback);
 	}
+function unsubscribe (screenname, feedUrl, callback) {
+	var sqltext = "delete from subscriptions where username = " + encode (screenname) + " and feedUrl = " + encode (feedUrl) + ";";
+	runSqltext (sqltext, function (result) {
+		callback (result);
+		});
+	}
 function isSubscribed (screenname, feedUrl, callback) {
 	getUserSubscriptions (screenname, function (subs) {
 		for (var i = 0; i < subs.length; i++) {
@@ -740,6 +746,11 @@ function handleHttpRequest (theRequest) {
 			}
 		return (true);
 		}
+	function updateUserOpml (screenname) { //code was repeating, factored here
+		uploadUserOpmlToS3 (screenname, function (err, result) {
+			httpReturn (err, result);
+			});
+		}
 	function callWithScreenname (callback) {
 		davetwitter.getScreenName (token, secret, function (screenname) {
 			if (screenname === undefined) {
@@ -796,7 +807,14 @@ function handleHttpRequest (theRequest) {
 		case "/subscribe":
 			callWithScreenname (function (screenname) {
 				subscribe (screenname, theRequest.params.feedurl, function (result) {
-					returnData (result);
+					updateUserOpml (screenname);
+					});
+				});
+			return (true); //we handled it
+		case "/unsubscribe": //3/10/18 by DW
+			callWithScreenname (function (screenname) {
+				unsubscribe (screenname, theRequest.params.feedurl, function (result) {
+					updateUserOpml (screenname);
 					});
 				});
 			return (true); //we handled it
@@ -840,9 +858,7 @@ function handleHttpRequest (theRequest) {
 			callWithScreenname (function (screenname) {
 				console.log ("/saveopml: theRequest.postBody.length == " + theRequest.postBody.length);
 				saveUserOpml (screenname, theRequest.postBody, function (err, result) {
-					uploadUserOpmlToS3 (screenname, function (err, result) {
-						httpReturn (err, result);
-						});
+					updateUserOpml (screenname);
 					});
 				});
 			return (true); //we handled it
@@ -864,9 +880,7 @@ function handleHttpRequest (theRequest) {
 		case "/deleteallsubs": //3/9/18 by DW
 			callWithScreenname (function (screenname) {
 				deleteSubscriptions (screenname, function (result) {
-					uploadUserOpmlToS3 (screenname, function (err, result) {
-						httpReturn (err, result);
-						});
+					updateUserOpml (screenname);
 					});
 				});
 			return (true); //we handled it
