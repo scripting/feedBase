@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.5.7";     
+var myProductName = "feedBase", myVersion = "0.5.8";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -208,7 +208,7 @@ function addFeedToDatabase (feedUrl, callback) {
 		});
 	}
 function getHotlist (callback) {
-	const sqltext = "SELECT subscriptions.feedUrl, feeds.title, feeds.htmlUrl, COUNT(subscriptions.feedUrl) AS countSubs FROM subscriptions, feeds WHERE subscriptions.feedUrl = feeds.feedUrl GROUP BY feedUrl ORDER BY countSubs DESC LIMIT 100;";
+	const sqltext = "SELECT subscriptions.feedUrl, feeds.title, feeds.htmlUrl, COUNT(subscriptions.feedUrl) AS countSubs FROM subscriptions, feeds WHERE subscriptions.feedUrl = feeds.feedUrl and feeds.title is not null GROUP BY feedUrl ORDER BY countSubs DESC LIMIT 100;";
 	runSqltext (sqltext, function (result) {
 		callback (result);
 		});
@@ -238,14 +238,14 @@ function getInfoAboutKnownFeeds (callback) {
 		doNextFeed (0);
 		});
 	}
-function deleteSubscriptions (username, listname, callback) {
-	var sqltext = "delete from subscriptions where username = " + encode (username) + " and listname = " + encode (listname) + ";";
+function deleteSubscriptions (username, callback) {
+	var sqltext = "delete from subscriptions where username = " + encode (username) + ";";
 	runSqltext (sqltext, function (result) {
 		callback (result);
 		});
 	}
 function getUserSubscriptions (username, callback) {
-	var sqltext = "SELECT s.feedUrl, f.title, f.htmlUrl, f.countSubs FROM subscriptions AS s, feeds AS f WHERE s.feedUrl = f.feedUrl AND s.username = " + encode (username) + " ORDER BY s.whenUpdated DESC;";
+	var sqltext = "SELECT s.feedUrl, f.title, f.htmlUrl, f.countSubs FROM subscriptions AS s, feeds AS f WHERE s.feedUrl = f.feedUrl AND f.title is not null AND s.username = " + encode (username) + " ORDER BY s.whenUpdated DESC;";
 	runSqltext (sqltext, function (result) {
 		callback (result);
 		});
@@ -301,7 +301,12 @@ function getUserOpmlSubscriptions (username, callback) {
 	}
 function uploadUserOpmlToS3 (username, callback) { //2/28/18 by DW
 	getUserOpmlSubscriptions (username, function (err, opmltext) {
-		if (!err) {
+		if (err) {
+			if (callback !== undefined) {
+				callback (err);
+				}
+			}
+		else {
 			var fname = username + ".opml";
 			var path = config.opmlS3path + fname;
 			s3.newObject (path, opmltext, "text/xml", "public-read", function (err, data) {
@@ -312,11 +317,6 @@ function uploadUserOpmlToS3 (username, callback) { //2/28/18 by DW
 					callback (undefined, jstruct);
 					}
 				});
-			}
-		else {
-			if (callback !== undefined) {
-				callback ();
-				}
 			}
 		});
 	}
@@ -348,8 +348,6 @@ function updateLeastRecentlyUpdatedFeed (callback) {
 			var theFeed = result [0];
 			var secsSinceUpdate = utils.secondsSince (theFeed.whenUpdated);
 			if (secsSinceUpdate >= config.minSecsBetwSingleFeedUpdate) {
-				console.log ("Updating " + theFeed.feedUrl + ", last updated " + (secsSinceUpdate / 3600).toFixed (2) + " hours ago.");
-				flOneConsoleMsgInLastMinute = true;
 				addFeedToDatabase (theFeed.feedUrl, function (addResult) {
 					saveFeedInfoJson (theFeed.feedUrl, function () {
 						if (callback !== undefined) {
@@ -441,8 +439,11 @@ function readFeed (feedUrl, callback) {
 			});
 		}
 	catch (err) {
+		var response = {
+			statusCode: 400 //something like ENOTFOUND or ETIMEDOUT
+			};
 		console.log ("readFeed: err.message == " + err.message);
-		callback (undefined);
+		callback (undefined, response);
 		}
 	}
 function getFeedInfo (feedUrl, callback) {
@@ -498,7 +499,6 @@ function processOpmlFile (f, screenname, callback) { //what we do when the user 
 		if (feedlist !== undefined) {
 			var fname = utils.stringLastField (f, "/");
 			dontDeleteSubscriptions (screenname, fname, function (result) {
-				console.log ("processOpmlFile: feedlist == " + utils.jsonStringify (feedlist));
 				function doNextFeed (ix) {
 					if (ix < feedlist.length) {
 						var feedUrl = feedlist [ix];
@@ -537,7 +537,9 @@ function importUserFolder (username, callback) {
 		fs.readdir (userfolder, function (err, filelist) {
 			if (err) {
 				console.log ("importOpmlFiles: err.message == " + err.message);
-				callback ();
+				if (callback !== undefined) {
+					callback ();
+					}
 				}
 			else {
 				function processNextFile (ix) {
@@ -549,7 +551,9 @@ function importUserFolder (username, callback) {
 							});
 						}
 					else {
-						callback ();
+						if (callback !== undefined) {
+							callback ();
+							}
 						}
 					}
 				processNextFile (0);
@@ -702,7 +706,19 @@ function handleHttpRequest (theRequest) {
 		theRequest.httpReturn (code, "text/plain", code + " REDIRECT");
 		}
 		
-	
+	function getSqlResult (sqltext, callback) {
+		theSqlConnectionPool.getConnection (function (err, connection) {
+			if (err) {
+				httpReturn (err);
+				}
+			else {
+				connection.query (sqltext, function (err, result) {
+					connection.release ();
+					httpReturn (err, result);
+					});
+				}
+			});
+		}
 	function returnServerHomePage () { //return true if we handled it
 		if (config.urlServerHomePageSource === undefined) {
 			return (false);
@@ -724,7 +740,6 @@ function handleHttpRequest (theRequest) {
 			}
 		return (true);
 		}
-	
 	function callWithScreenname (callback) {
 		davetwitter.getScreenName (token, secret, function (screenname) {
 			if (screenname === undefined) {
@@ -775,6 +790,9 @@ function handleHttpRequest (theRequest) {
 				theRequest.httpReturn (200, "application/json", utils.jsonStringify (result));
 				});
 			return (true); //we handled it
+		case "/geterrantfeeds": //3/9/18 by DW
+			getSqlResult ("select * from feeds where ctConsecutiveErrors > 0;");
+			return (true); //we handled it
 		case "/subscribe":
 			callWithScreenname (function (screenname) {
 				subscribe (screenname, theRequest.params.feedurl, function (result) {
@@ -805,8 +823,16 @@ function handleHttpRequest (theRequest) {
 			return (true); //we handled it
 		case "/getopml":
 			callWithScreenname (function (screenname) {
-				getUserOpml (screenname, function (result) {
-					returnData (result);
+				getUserOpmlSubscriptions (screenname, function (err, opmltext) {
+					if (err) {
+						returnError (err);
+						}
+					else {
+						var result = {
+							opmltext: opmltext
+							};
+						returnData (result);
+						}
 					});
 				});
 			return (true); //we handled it
@@ -833,6 +859,15 @@ function handleHttpRequest (theRequest) {
 				else {
 					returnXml (opmltext);
 					}
+				});
+			return (true); //we handled it
+		case "/deleteallsubs": //3/9/18 by DW
+			callWithScreenname (function (screenname) {
+				deleteSubscriptions (screenname, function (result) {
+					uploadUserOpmlToS3 (screenname, function (err, result) {
+						httpReturn (err, result);
+						});
+					});
 				});
 			return (true); //we handled it
 		case "/favicon.ico":
@@ -932,21 +967,15 @@ function startup () {
 		readConfig (function () {
 			console.log ("config == " + utils.jsonStringify (config));
 			theSqlConnectionPool = mysql.createPool (config.database);
-			
 			config.twitter.httpRequestCallback = handleHttpRequest;
 			config.twitter.flPostEnabled = true; //3/1/18 by DW
 			davetwitter.start (config.twitter, function () {
 				});
-			
-			importUserFolder ("1999io", function () {
-				console.log ("importUserFolder returned.");
-				setInterval (everySecond, 1000); 
-				utils.runAtTopOfMinute (function () {
-					setInterval (everyMinute, 60000); 
-					everyMinute ();
-					});
+			setInterval (everySecond, 1000); 
+			utils.runAtTopOfMinute (function () {
+				setInterval (everyMinute, 60000); 
+				everyMinute ();
 				});
-			
 			});
 		});
 	}
