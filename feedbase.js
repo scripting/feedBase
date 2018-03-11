@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.5.9";     
+var myProductName = "feedBase", myVersion = "0.5.10";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -478,10 +478,12 @@ function readOpmlSubscriptionList (f, flExpandIncludes, callback) { //read OPML 
 	opml.readOpmlFile (f, function (theOutline) {
 		if (theOutline !== undefined) {
 			var feedlist = new Array ();
-			for (var i = 0; i < theOutline.subs.length; i++) {
-				var feed = theOutline.subs [i];
-				if (feed.xmlurl !== undefined) {
-					feedlist.push (feed.xmlurl);
+			if (theOutline.subs !== undefined) {
+				for (var i = 0; i < theOutline.subs.length; i++) {
+					var feed = theOutline.subs [i];
+					if (feed.xmlurl !== undefined) {
+						feedlist.push (feed.xmlurl);
+						}
 					}
 				}
 			callback (feedlist);
