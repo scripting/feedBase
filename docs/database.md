@@ -30,3 +30,15 @@ Each element in the <i>feeds</i> table represents one feed.
 
 6. countSubs -- the number of subscribers. 
 
+### subscriptions
+
+Each element in the <i>subscriptions</i> table represents one subscription. 
+
+1. username -- the Twitter ID of the user whose subscription this is. 
+
+4. feedUrl -- the URL of the feed that the user is subscribed to. 
+
+3. whenUpdated -- when the subscription was last updated.
+
+2. listname -- the list that the subscription came from (now it's always subs.opml, in the future we may support more than one list per user).
+
