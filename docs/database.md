@@ -48,5 +48,29 @@ create table feeds (
 
 feedUrl varchar (512), 
 
-title varchar (255), htmlUrl varchar (512), description varchar (512), whenUpdated datetime, countSubs int, ctSecs float, code int, ctErrors INT DEFAULT 0, ctConsecutiveErrors INT DEFAULT 0, ctChecks INT DEFAULT 0, whenLastError DATETIME, PRIMARY KEY (feedUrl));
+title varchar (255), 
+
+htmlUrl varchar (512), 
+
+description varchar (512), 
+
+whenUpdated datetime, 
+
+countSubs int, 
+
+ctSecs float, 
+
+code int, 
+
+ctErrors INT DEFAULT 0, 
+
+ctConsecutiveErrors INT DEFAULT 0, 
+
+ctChecks INT DEFAULT 0, 
+
+whenLastError DATETIME, 
+
+PRIMARY KEY (feedUrl)
+
+);
 
