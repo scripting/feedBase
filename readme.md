@@ -12,7 +12,7 @@ There are three types of nodes in our graph:
 
 3. subscriptions
 
-The relationship we manage: user subscribes to a feed.
+The relationships we manage: users subscribe to feeds.
 
 A user can enter subscriptions in two ways.
 
