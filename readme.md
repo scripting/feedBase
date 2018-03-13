@@ -18,7 +18,7 @@ A user can enter subscriptions in two ways.
 
 1. Upload an OPML subscription list. 
 
-2. When browsing, you can click a button to subscribe or unsubscribe.
+2. When browsing, click a button to subscribe or unsubscribe.
 
 You can upload as many OPML subscription lists as you like.
 
