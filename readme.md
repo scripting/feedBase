@@ -32,6 +32,8 @@ You can click on a name of a user to see the feeds they subscribe to. And on and
 
 Periodically we read the feeds to keep our database of info about them up to date. 
 
+There's a command that lets you see all the feeds you're subscribed to. And a command that lets you delete all your subscriptions to start over. 
+
 ### Why?
 
 The world of news and blogs need glue. We'll never know how much stuff is going on until we start looking for it. In a sense it's like the first time around, when we <a href="https://en.wiktionary.org/wiki/put_out_feelers">put out feelers</a> of different kinds. Some worked others didn't. I remember this approach, the one I'm using in feedBase, working really well.
