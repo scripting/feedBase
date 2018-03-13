@@ -36,7 +36,7 @@ There's a command that lets you see all the feeds you're subscribed to. And a co
 
 ### Why?
 
-The world of news and blogs need glue. We'll never know how much stuff is going on until we start looking for it. In a sense it's like the first time around, when we <a href="https://en.wiktionary.org/wiki/put_out_feelers">put out feelers</a> of different kinds. Some worked others didn't. I remember this approach, the one I'm using in feedBase, working really well.
+The world of news and blogs needs glue. We'll never know how much stuff is going on until we start looking for it. In a sense it's like the first time around, when we <a href="https://en.wiktionary.org/wiki/put_out_feelers">put out feelers</a> of different kinds. Some worked others didn't. I remember this approach, the one I'm using in feedBase, working really well.
 
 ### Why now?
 
