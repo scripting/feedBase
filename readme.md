@@ -32,3 +32,9 @@ RSS and OPML are a strong foundation, widely supported. And as they say, really 
 
 There are lots of ideas. I want to write some of them down here. 
 
+### Other docs
+
+1. <a href="https://github.com/scripting/feedbase/blob/master/docs/groundrules.md">Groundrules</a> -- what you need to know about privacy and how feedBase works.
+
+1. <a href="https://github.com/scripting/feedbase/blob/master/docs/database.md">Database structure</a> -- docs for the <i>feeds</i> and <i>subscriptions</i> tables.  
+
