@@ -56,9 +56,9 @@ create
 
 
 
+```
 
-
-   create table feeds (
+create table feeds (
 
       feedUrl varchar (512), 
 
@@ -87,6 +87,8 @@ create
       PRIMARY KEY (feedUrl)
 
       );
+
+```
 
 2. xxx
 
