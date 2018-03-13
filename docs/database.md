@@ -44,6 +44,8 @@ Each element in the <i>subscriptions</i> table represents one subscription.
 
 ### SQL commands to create the tables
 
+`
+
 create table feeds (
 
 feedUrl varchar (512), 
@@ -73,6 +75,8 @@ whenLastError DATETIME,
 PRIMARY KEY (feedUrl)
 
 );
+
+`
 
 2. xxx
 
