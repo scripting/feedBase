@@ -1,6 +1,6 @@
 ## Database structure for feedBase
 
-There are two tables, feeds and subscriptions.
+There are two tables, <i>feeds</i> and <i>subscriptions</i>.
 
 ### feeds
 
