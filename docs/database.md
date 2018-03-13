@@ -76,7 +76,19 @@ create table feeds (
 
       );
 
-```
+create table subscriptions (
 
-2. xxx
+      username varchar (255), 
+
+      listname varchar (255), 
+
+      feedUrl varchar (512), 
+
+      whenupdated datetime, 
+
+      PRIMARY KEY (feedUrl, username)
+
+      );
+
+```
 
