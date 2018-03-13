@@ -4,7 +4,7 @@ A project to get lots of feeds into a database.
 
 ### How it works
 
-There are three types of nodes in our database:
+There are three types of nodes in our graph:
 
 1. users
 
