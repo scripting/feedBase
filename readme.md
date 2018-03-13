@@ -2,10 +2,6 @@
 
 A project to get lots of feeds into a database.
 
-### Who are you?
-
-My name is <a href="http://scripting.com/?tab=about">Dave Winer</a>. 
-
 ### How it works
 
 There are three types of nodes in our graph:
@@ -53,6 +49,10 @@ The database software is open source so if other communities want to run their o
 ### Open formats and protocols
 
 RSS and OPML are a strong foundation, widely supported. And as they say, really simple. 
+
+### Who are you?
+
+My name is <a href="http://scripting.com/?tab=about">Dave Winer</a>. 
 
 ### Other docs
 
