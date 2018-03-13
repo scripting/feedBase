@@ -44,18 +44,6 @@ Each element in the <i>subscriptions</i> table represents one subscription.
 
 ### SQL commands to create the tables
 
-
-
-```
-
-create
-
-   hello
-
-```
-
-
-
 ```
 
 create table feeds (
@@ -76,15 +64,15 @@ create table feeds (
 
       code int, 
 
-      ctErrors INT DEFAULT 0, 
+      ctErrors int default 0, 
 
-      ctConsecutiveErrors INT DEFAULT 0, 
+      ctConsecutiveErrors int default 0, 
 
-      ctChecks INT DEFAULT 0, 
+      ctChecks int default 0, 
 
-      whenLastError DATETIME, 
+      whenLastError datetime, 
 
-      PRIMARY KEY (feedUrl)
+      primary key (feedUrl)
 
       );
 
