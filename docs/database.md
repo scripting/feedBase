@@ -44,7 +44,7 @@ Each element in the <i>subscriptions</i> table represents one subscription.
 
 ### SQL commands to create the tables
 
-```
+```SQL
 
 create table feeds (
 
