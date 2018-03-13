@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.5.10";     
+var myProductName = "feedBase", myVersion = "0.5.11";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -19,6 +19,8 @@ var config = {
 	usersFolder: "users/",
 	fnamePrefs: "prefs.json", //each user's prefs file
 	fnameOpml: "subs.opml",
+	fnameLastUploadedOpml: "lastUploaded.opml", 
+	fnameS3backup: "s3Backup.opml",
 	fnameStats: "data/stats.json", //stats for the app
 	savedFeedInfoFolder: "data/feeds/",
 	fnameFeedInfo: "feedInfo.json",
@@ -31,7 +33,7 @@ var config = {
 		pagetitle: "feedBase"
 		},
 	urlFavicon: "http://scripting.com/favicon.ico",
-	urlServerHomePageSource: undefined,
+	urlServerHomePageSource: "http://scripting.com/code/syo/index.html",
 	ctSecsHomepageCache: 1 //set it higher for stable production server
 	};
 const fnameConfig = "config.json";
@@ -310,6 +312,14 @@ function uploadUserOpmlToS3 (username, callback) { //2/28/18 by DW
 			var fname = username + ".opml";
 			var path = config.opmlS3path + fname;
 			s3.newObject (path, opmltext, "text/xml", "public-read", function (err, data) {
+				
+				var f = config.usersFolder + username + "/" + config.fnameS3backup; //3/13/18 by DW
+				utils.sureFilePath (f, function () {
+					fs.writeFile (f, opmltext, function (err) {
+						console.log ("uploadUserOpmlToS3: f == " + f);
+						});
+					});
+				
 				if (callback !== undefined) {
 					var jstruct = {
 						opmlUrl: config.opmlS3url + fname
@@ -624,7 +634,7 @@ function getUserOpml (screenname, callback) {
 		});
 	}
 function saveUserOpml (screenname, opmltext, callback) {
-	var opmlFile = config.usersFolder + screenname + "/" + config.fnameOpml;
+	var opmlFile = config.usersFolder + screenname + "/" + config.fnameLastUploadedOpml;
 	utils.sureFilePath (opmlFile, function () {
 		fs.writeFile (opmlFile, opmltext, function (err) {
 			processOpmlFile (opmlFile, screenname, function (err) {
