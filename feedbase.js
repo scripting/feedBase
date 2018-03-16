@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.5.12";     
+var myProductName = "feedBase", myVersion = "0.5.14";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -53,8 +53,8 @@ var stats = {
 	ctFeedUpdatesToday: 0,
 	ctFeedUpdatesThisRun: 0,
 	whenLastFeedUpdate: new Date (),
-	
 	whenLastDayRollover: new Date (),
+	whenLastHotlistChange: new Date (), 
 	
 	lastFeedUpdate: {
 		}
@@ -62,9 +62,7 @@ var stats = {
 var flStatsChanged = false;
 
 var theSqlConnectionPool = undefined; 
-
 var flOneConsoleMsgInLastMinute = false;
-
 var whenLastHomepageRead = new Date (0), homepageCache = undefined;
 
 
@@ -77,13 +75,16 @@ function isFolder (f) {
 function statsChanged () {
 	flStatsChanged = true;
 	}
+function hotlistChanged () {
+	stats.whenLastHotlistChange = new Date (); //3/16/18 by DW
+	statsChanged ();
+	}
 function processHomepageText (s) { //2/1/18 by DW
 	var pagetable = new Object (), pagetext;
 	utils.copyScalars (config.homepage, pagetable);
 	pagetable.productName = myProductName;
 	pagetable.version = myVersion;
 	pagetable.configJson = utils.jsonStringify (pagetable);
-	console.log ("processHomepageText: pagetable == " + utils.jsonStringify (pagetable));
 	pagetext = utils.multipleReplaceAll (s, pagetable, false, "[%", "%]");
 	return (pagetext);
 	}
@@ -150,6 +151,7 @@ function resetFeedSubCount (feedUrl, callback) { //set the ctSubs column for the
 function addSubscriptionToDatabase (username, listname, feedurl, callback) {
 	var now = formatDateTime (new Date ());
 	var sqltext = "REPLACE INTO subscriptions (username, listname, feedUrl, whenUpdated) VALUES (" + encode (username) + ", " + encode (listname) + ", " + encode (feedurl) + ", " + encode (now) + ");";
+	hotlistChanged ();
 	runSqltext (sqltext, function (result) {
 		resetFeedSubCount (feedurl, function (resetResult) {
 			if (callback !== undefined) {
@@ -214,6 +216,27 @@ function getHotlist (callback) {
 	runSqltext (sqltext, function (result) {
 		callback (result);
 		});
+	}
+function updateHotlist (whenClientLastUpdate, callback) { //3/16/18 by DW
+	var whenClient = new Date (whenClientLastUpdate);
+	var whenServer = new Date (stats.whenLastHotlistChange);
+	if (whenServer > whenClient) {
+		getHotlist (function (theHotlist) {
+			var returnData = {
+				hotlist: theHotlist,
+				when: stats.whenLastHotlistChange
+				};
+				
+			callback (returnData);
+			});
+		}
+	else {
+		var returnData = {
+			when: stats.whenLastHotlistChange
+			};
+			
+		callback (returnData);
+		}
 	}
 function getKnownFeeds (callback) {
 	var sqltext = "select distinct feedUrl from subscriptions;";
@@ -510,37 +533,32 @@ function readOpmlSubscriptionList (f, flExpandIncludes, callback) { //read OPML 
 		}, flExpandIncludes);
 	}
 function processOpmlFile (f, screenname, callback) { //what we do when the user submits an OPML file
-	function dontDeleteSubscriptions (username, listname, callback) { //3/7/18 by DW
-		callback ();
-		}
 	readOpmlSubscriptionList (f, false, function (feedlist) {
 		if (feedlist !== undefined) {
 			var fname = utils.stringLastField (f, "/");
-			dontDeleteSubscriptions (screenname, fname, function (result) {
-				function doNextFeed (ix) {
-					if (ix < feedlist.length) {
-						var feedUrl = feedlist [ix];
-						getFeedInfoFromDatabase (feedUrl, function (err, info) {
-							if (err) { //not in database
-								addFeedToDatabase (feedUrl, function (addResult) {
-									addSubscriptionToDatabase (screenname, fname, feedUrl, function () {
-										doNextFeed (ix + 1);
-										});
-									});
-								}
-							else {
+			function doNextFeed (ix) {
+				if (ix < feedlist.length) {
+					var feedUrl = feedlist [ix];
+					getFeedInfoFromDatabase (feedUrl, function (err, info) {
+						if (err) { //not in database
+							addFeedToDatabase (feedUrl, function (addResult) {
 								addSubscriptionToDatabase (screenname, fname, feedUrl, function () {
 									doNextFeed (ix + 1);
 									});
-								}
-							});
-						}
-					else {
-						callback (undefined); //no error
-						}
+								});
+							}
+						else {
+							addSubscriptionToDatabase (screenname, fname, feedUrl, function () {
+								doNextFeed (ix + 1);
+								});
+							}
+						});
 					}
-				doNextFeed (0);
-				});
+				else {
+					callback (undefined); //no error
+					}
+				}
+			doNextFeed (0);
 			}
 		else {
 			callback ({message: "Can't process the subscription list because it is not a valid OPML file."});
@@ -599,6 +617,7 @@ function subscribe (screenname, feedUrl, callback) {
 	}
 function unsubscribe (screenname, feedUrl, callback) {
 	var sqltext = "delete from subscriptions where username = " + encode (screenname) + " and feedUrl = " + encode (feedUrl) + ";";
+	hotlistChanged ();
 	runSqltext (sqltext, function (result) {
 		callback (result);
 		});
@@ -676,7 +695,6 @@ function getPrefs (screenname, callback) {
 	}
 function savePrefs (screenname, jsontext, callback) {
 	var prefsFile = config.usersFolder + screenname + "/" + config.fnamePrefs;
-	console.log ("savePrefs: screenname == " + screenname + ", jsontext == " + jsontext);
 	utils.sureFilePath (prefsFile, function () {
 		fs.writeFile (prefsFile, jsontext, function (err) {
 			callback (err, true);
@@ -788,6 +806,11 @@ function handleHttpRequest (theRequest) {
 			return (true); //we handled it
 		case "/hotlist":
 			getHotlist (function (result) {
+				theRequest.httpReturn (200, "application/json", utils.jsonStringify (result));
+				});
+			return (true); //we handled it
+		case "/updatehotlist": //3/16/18 by DW
+			updateHotlist (theRequest.params.when, function (result) {
 				theRequest.httpReturn (200, "application/json", utils.jsonStringify (result));
 				});
 			return (true); //we handled it
