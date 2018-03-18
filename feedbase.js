@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.5.14";     
+var myProductName = "feedBase", myVersion = "0.5.15";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -324,6 +324,9 @@ function getUserOpmlSubscriptions (username, callback) {
 			});
 		});
 	}
+function getUserOpmlUrl (username) {
+	return (config.opmlS3url + username + ".opml");
+	}
 function uploadUserOpmlToS3 (username, callback) { //2/28/18 by DW
 	getUserOpmlSubscriptions (username, function (err, opmltext) {
 		if (err) {
@@ -345,7 +348,7 @@ function uploadUserOpmlToS3 (username, callback) { //2/28/18 by DW
 				
 				if (callback !== undefined) {
 					var jstruct = {
-						opmlUrl: config.opmlS3url + fname
+						opmlUrl: getUserOpmlUrl (username)
 						};
 					callback (undefined, jstruct);
 					}
@@ -904,8 +907,12 @@ function handleHttpRequest (theRequest) {
 				});
 			return (true); //we handled it
 		case "/getsubs":
-			getUserSubscriptions (theRequest.params.username, function (result) {
-				returnData (result);
+			getUserSubscriptions (theRequest.params.username, function (subsArray) {
+				var jstruct = {
+					opmlUrl: getUserOpmlUrl (theRequest.params.username),
+					theSubs: subsArray
+					};
+				returnData (jstruct);
 				});
 			return (true); //we handled it
 		case "/getopmlsubs":
