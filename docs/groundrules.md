@@ -4,15 +4,19 @@ What you need to know about privacy and how feedBase works.
 
 ### Everything is public
 
-Everything you upload to feedBase and the fact that it was you who uploaded it is public information.
+All the information you upload to feedBase is public. 
 
-We want to learn about new feeds, about what's popular, and we're not sure what else. That can't work without the information being publicly accessible.
+This is a publishing system. 
 
 ### We use Twitter for ID
 
-But we will not read any of your messages, posts, see who your friends are, unless you ask us to, through use of a command. 
+We only use Twitter for two things:
 
-We will ask Twitter for public profile information, so we can fill in some feedBase defaults for you, using those values. 
+1. To associate a unique name with each user, so we can store each user's subscriptions separately from other users' subscriptions. 
+
+2. We will ask Twitter for public profile information, possibly so we can fill in some feedBase defaults for you, using those values. 
+
+feedBase will not post on your behalf, read any of your Twitter messages, posts, see who your friends are, unless you ask us to, through the use of a command that clearly confirms what it is going to do. At this point there are no commands that do any of this. 
 
 ### Upload as many OPML files as you like
 
