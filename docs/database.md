@@ -1,6 +1,6 @@
 ## Database structure for feedBase
 
-There are two tables, <i>feeds</i> and <i>subscriptions</i>.
+There are three tables, <i>feeds,</i>  <i>subscriptions</i> and <i>log</i>.
 
 ### feeds
 
@@ -41,6 +41,18 @@ Each element in the <i>subscriptions</i> table represents one subscription.
 3. whenUpdated -- when the subscription was last updated.
 
 2. listname -- the list that the subscription came from (now it's always subs.opml, in the future we may support more than one list per user).
+
+### log
+
+Each element in the <i>log</i> table represents a log entry. 
+
+1. username -- the Twitter ID of the user who initiated the event. 
+
+4. feedUrl -- the URL of the feed that the event relates to. 
+
+3. whenadd -- when the event was last added
+
+2. what -- indicates what happened, for example, subscribe, unsubscribe or new feed.
 
 ### SQL commands to create the tables
 
@@ -87,6 +99,20 @@ create table subscriptions (
       whenupdated datetime, 
 
       PRIMARY KEY (feedUrl, username)
+
+      );
+
+create table log (
+
+      username varchar (255), 
+
+      feedUrl varchar (512), 
+
+      whenadd datetime, 
+
+      what varchar (255), 
+
+      PRIMARY KEY (whenadd, username)
 
       );
 
