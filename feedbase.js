@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.5.18";     
+var myProductName = "feedBase", myVersion = "0.5.19";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -39,8 +39,9 @@ var config = {
 	urlServerHomePageSource: "http://scripting.com/code/syo/index.html",
 	ctSecsHomepageCache: 1, //set it higher for stable production server
 	
-	whenHotlistCreated: new Date ("January 1, 2018"),
-	hotlistTitle: "feedBase hotlist in OPML"
+	whenHotlistCreated: new Date ("Fri, 09 Mar 2018 17:46:45 GMT"),
+	hotlistTitle: "feedBase hotlist in OPML",
+	s3HotlistPath: "hotlist.opml"
 	};
 const fnameConfig = "config.json";
 
@@ -400,7 +401,7 @@ function getUserOpmlSubscriptions (username, callback) {
 		});
 	}
 function getUserOpmlUrl (username) {
-	return (config.opmlS3url + username + ".opml");
+	return (config.opmlS3url + username + "/main.opml");
 	}
 function uploadUserOpmlToS3 (username, callback) { //2/28/18 by DW
 	getUserOpmlSubscriptions (username, function (err, opmltext) {
@@ -410,14 +411,13 @@ function uploadUserOpmlToS3 (username, callback) { //2/28/18 by DW
 				}
 			}
 		else {
-			var fname = username + ".opml";
-			var path = config.opmlS3path + fname;
+			var path = config.opmlS3path + username + "/main.opml";
 			s3.newObject (path, opmltext, "text/xml", "public-read", function (err, data) {
+				console.log ("uploadUserOpmlToS3: url == http:/" + path);
 				
 				var f = config.usersFolder + username + "/" + config.fnameS3backup; //3/13/18 by DW
 				utils.sureFilePath (f, function () {
 					fs.writeFile (f, opmltext, function (err) {
-						console.log ("uploadUserOpmlToS3: f == " + f);
 						});
 					});
 				
@@ -434,7 +434,7 @@ function uploadUserOpmlToS3 (username, callback) { //2/28/18 by DW
 function uploadHotlistToS3 (callback) { //3/22/18 by DW
 	getHotlist (function (theHotlist) {
 		var opmltext = getOpmlFromArray (config.hotlistTitle, config.whenHotlistCreated, theHotlist);
-		var path = config.opmlS3path + "system/hotlist.opml";
+		var path = config.opmlS3path + config.s3HotlistPath;
 		s3.newObject (path, opmltext, "text/xml", "public-read", function (err, data) {
 			callback ();
 			});
