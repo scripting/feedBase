@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.5.19";     
+var myProductName = "feedBase", myVersion = "0.6.2";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -11,6 +11,7 @@ const davehttp = require ("davehttp");
 const davetwitter = require ("davetwitter");
 const feedParser = require ("feedparser");
 const crypto = require ("crypto");
+const feedRead = require ("davefeedread"); //3/31/18 by DW
 
 var config = {
 	ctSecsBetwFeedUpdates: 15,
@@ -62,6 +63,7 @@ var stats = {
 	whenLastFeedUpdate: new Date (),
 	whenLastDayRollover: new Date (),
 	whenLastHotlistChange: new Date (), 
+	whenLastLogChange: new Date (), 
 	
 	lastFeedUpdate: {
 		}
@@ -76,6 +78,21 @@ var flHotlistChanged = false;
 
 function hashMD5 (s) {
 	return (crypto.createHash ("md5").update (s).digest ("hex"));
+	}
+function derefUrl (url, callback) {
+	var theRequest = {
+		method: "HEAD", 
+		url: url, 
+		followAllRedirects: true
+		};
+	request (theRequest, function (err, response) {
+		if (err) {
+			callback (err);
+			}
+		else {
+			callback (undefined, response.request.href);
+			}
+		});
 	}
 function isFolder (f) {
 	return (fs.lstatSync (f).isDirectory ());
@@ -175,6 +192,7 @@ function addSubscriptionToDatabase (username, listname, feedurl, callback) {
 	var theLog = {
 		whenLastSave: new Date (),
 		whenLastRollover: new Date (),
+		ctSaves: 0,
 		logArray: new Array ()
 		};
 		
@@ -189,26 +207,20 @@ function addSubscriptionToDatabase (username, listname, feedurl, callback) {
 			when: new Date ()
 			});
 		flLogChanged = true;
+		stats.whenLastLogChange = new Date (); //3/28/18 by DW
+		statsChanged ();
 		}
 	function writeLogIfChanged (callback) {
-		function checkRollover () {
-			var now = new Date ();
-			if (!utils.sameDay (theLog.whenLastRollover, now)) { //rollover
-				theLog.whenLastRollover = now;
-				theLog.logArray = new Array ();
-				flLogChanged = true;
-				}
-			}
 		if (flLogChanged) {
 			flLogChanged = false;
 			theLog.whenLastSave = new Date ();
+			theLog.ctSaves++;
 			utils.sureFilePath (config.fnameLog, function () {
 				var jsontext = utils.jsonStringify (theLog);
 				fs.writeFile (config.fnameLog, jsontext, function (err) {
 					var f = config.logsFolder + utils.getDatePath (undefined, false) + ".json";
 					utils.sureFilePath (f, function () {
 						fs.writeFile (f, jsontext, function (err) {
-							checkRollover ();
 							});
 						});
 					});
@@ -308,6 +320,24 @@ function updateHotlist (whenClientLastUpdate, callback) { //3/16/18 by DW
 			
 		callback (returnData);
 		}
+	}
+function updateLog (whenClientLastUpdate, callback) { //3/28/18 by DW
+	var whenClient = new Date (whenClientLastUpdate);
+	var whenServer = new Date (stats.whenLastLogChange);
+	var returnData = {
+		when: stats.whenLastLogChange
+		};
+	if (whenServer > whenClient) {
+		var ct = 100;
+		if (theLog.logArray.length < ct) {
+			ct = theLog.logArray.length;
+			}
+		returnData.log = new Array ();
+		for (var i = 0; i < ct; i++) {
+			returnData.log.push (theLog.logArray [i]);
+			}
+		}
+	callback (returnData);
 	}
 function getKnownFeeds (callback) {
 	var sqltext = "select distinct feedUrl from subscriptions;";
@@ -567,16 +597,23 @@ function readFeed (feedUrl, callback) {
 		}
 	}
 function getFeedInfo (feedUrl, callback) {
-	readFeed (feedUrl, function (feedItems, httpResponse) {
-		if ((feedItems === undefined) || (feedItems.length == 0)) {
+	feedRead.parseUrl (feedUrl, config.requestTimeoutSecs, function (err, theFeed, httpResponse) {
+		
+		if (httpResponse === undefined) {
+			console.log ("getFeedInfo: httpResponse is undefined, feedUrl == " + feedUrl);
+			httpResponse = { //should not be needed
+				statusCode: 400
+				}
+			}
+		
+		if (err) {
 			callback (undefined, httpResponse);
 			}
 		else {
-			var item = feedItems [0];
 			var info = {
-				title: item.meta.title,
-				htmlUrl: item.meta.link,
-				description: item.meta.description
+				title: theFeed.head.title,
+				htmlUrl: theFeed.head.link,
+				description: theFeed.head.description
 				}
 			callback (info, httpResponse);
 			}
@@ -626,20 +663,25 @@ function processOpmlFile (f, screenname, callback) { //what we do when the user 
 			function doNextFeed (ix) {
 				if (ix < feedlist.length) {
 					var feedUrl = feedlist [ix];
-					getFeedInfoFromDatabase (feedUrl, function (err, info) {
-						if (err) { //not in database
-							addFeedToDatabase (feedUrl, function (addResult) {
-								addToLog (screenname, "new feed", feedUrl);
+					derefUrl (feedUrl, function (err, newUrl) { //4/1/18 by DW
+						if (!err) {
+							feedUrl = newUrl;
+							}
+						getFeedInfoFromDatabase (feedUrl, function (err, info) {
+							if (err) { //not in database
+								addFeedToDatabase (feedUrl, function (addResult) {
+									addToLog (screenname, "new feed", feedUrl);
+									addSubscriptionToDatabase (screenname, fname, feedUrl, function () {
+										doNextFeed (ix + 1);
+										});
+									});
+								}
+							else {
 								addSubscriptionToDatabase (screenname, fname, feedUrl, function () {
 									doNextFeed (ix + 1);
 									});
-								});
-							}
-						else {
-							addSubscriptionToDatabase (screenname, fname, feedUrl, function () {
-								doNextFeed (ix + 1);
-								});
-							}
+								}
+							});
 						});
 					}
 				else {
@@ -906,16 +948,21 @@ function handleHttpRequest (theRequest) {
 		case "/":
 			return (returnServerHomePage ());
 		case "/now": 
-			theRequest.httpReturn (200, "text/plain", new Date ());
+			returnPlainText (new Date ());
 			return (true); //we handled it
 		case "/hotlist":
 			getHotlist (function (result) {
-				theRequest.httpReturn (200, "application/json", utils.jsonStringify (result));
+				returnData (result);
 				});
 			return (true); //we handled it
 		case "/updatehotlist": //3/16/18 by DW
 			updateHotlist (theRequest.params.when, function (result) {
-				theRequest.httpReturn (200, "application/json", utils.jsonStringify (result));
+				returnData (result);
+				});
+			return (true); //we handled it
+		case "/updatelog": //3/28/18 by DW
+			updateLog (theRequest.params.when, function (result) {
+				returnData (result);
 				});
 			return (true); //we handled it
 		case "/stats":
@@ -943,7 +990,7 @@ function handleHttpRequest (theRequest) {
 			return (true); //we handled it
 		case "/knownfeeds":
 			getKnownFeeds (function (result) {
-				theRequest.httpReturn (200, "application/json", utils.jsonStringify (result));
+				returnData (result);
 				});
 			return (true); //we handled it
 		case "/geterrantfeeds": //3/9/18 by DW
@@ -1100,6 +1147,12 @@ function everyMinute () {
 		stats.ctFeedUpdatesToday = 0;
 		stats.ctHitsToday = 0;
 		statsChanged ();
+		}
+	if (!utils.sameDay (theLog.whenLastRollover, now)) { //log rollover
+		theLog.whenLastRollover = now;
+		theLog.logArray = new Array ();
+		flLogChanged = true;
+		writeLogIfChanged (); 
 		}
 	if (flHotlistChanged) { //3/22/18 by DW
 		uploadHotlistToS3 (function () {

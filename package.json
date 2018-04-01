@@ -10,6 +10,7 @@
 		"feedparser": "*",
 		"dateformat": "*",
 		"daveutils": "*",
+		"davefeedread": "*",
 		"davetwitter": "*",
 		"daveopml": "*",
 		"daves3": "*"
