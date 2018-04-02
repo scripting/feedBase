@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.6.2";     
+var myProductName = "feedBase", myVersion = "0.6.5";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -65,6 +65,9 @@ var stats = {
 	whenLastHotlistChange: new Date (), 
 	whenLastLogChange: new Date (), 
 	
+	ctSubscriptions: undefined, //4/1/18 by DW
+	ctFeeds: undefined, //4/1/18 by DW
+	
 	lastFeedUpdate: {
 		}
 	};
@@ -83,7 +86,8 @@ function derefUrl (url, callback) {
 	var theRequest = {
 		method: "HEAD", 
 		url: url, 
-		followAllRedirects: true
+		followAllRedirects: true,
+		maxRedirects: 5
 		};
 	request (theRequest, function (err, response) {
 		if (err) {
@@ -511,16 +515,23 @@ function updateLeastRecentlyUpdatedFeed (callback) {
 	}
 function updateThisFeed (feedUrl, callback) { //handle a ping call
 	getFeedInfoFromDatabase (feedUrl, function (err, info) {
-		if (info.feedUrl !== undefined) { //it's one of our feeds
-			addFeedToDatabase (feedUrl, function (addResult) {
+		if (err) { //4/2/18 by DW
+			if (callback !== undefined) {
+				callback (err.message);
+				}
+			}
+		else {
+			if (info.feedUrl !== undefined) { //it's one of our feeds
+				addFeedToDatabase (feedUrl, function (addResult) {
+					if (callback !== undefined) {
+						callback (info);
+						}
+					});
+				}
+			else {
 				if (callback !== undefined) {
 					callback (info);
 					}
-				});
-			}
-		else {
-			if (callback !== undefined) {
-				callback (info);
 				}
 			}
 		});
@@ -814,6 +825,19 @@ function saveUserOpml (screenname, opmltext, callback) {
 			});
 		});
 	}
+function getDynamicStats (callback) {
+	var sqltext1 = "select count(*) from subscriptions;";
+	var sqltext2 = "select count(*) from feeds;";
+	runSqltext (sqltext1, function (result1) {
+		stats.ctSubscriptions = result1 [0] ["count(*)"];
+		runSqltext (sqltext2, function (result2) {
+			stats.ctFeeds = result2 [0] ["count(*)"];
+			if (callback !== undefined) {
+				callback (stats);
+				}
+			});
+		});
+	}
 function getPrefs (screenname, callback) {
 	var myPrefs = {
 		screenname: screenname
@@ -966,7 +990,9 @@ function handleHttpRequest (theRequest) {
 				});
 			return (true); //we handled it
 		case "/stats":
-			returnData (stats);
+			getDynamicStats (function (stats) {
+				returnData (stats);
+				});
 			return (true); //we handled it
 		case "/getfeedinfo":
 			getFeedInfoFromDatabase (theRequest.params.feedurl, function (err, result) {
