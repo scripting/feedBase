@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.6.5";     
+var myProductName = "feedBase", myVersion = "0.6.8";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -21,6 +21,7 @@ var config = {
 	fnamePrefs: "prefs.json", //each user's prefs file
 	fnameOpml: "subs.opml",
 	fnameLastUploadedOpml: "lastUploaded.opml", 
+	defaultListName: "default.opml",
 	fnameS3backup: "s3Backup.opml",
 	fnameStats: "data/stats.json", //stats for the app
 	fnameLog: "data/log.json", 
@@ -42,7 +43,9 @@ var config = {
 	
 	whenHotlistCreated: new Date ("Fri, 09 Mar 2018 17:46:45 GMT"),
 	hotlistTitle: "feedBase hotlist in OPML",
-	s3HotlistPath: "hotlist.opml"
+	s3HotlistPath: "hotlist.opml",
+	
+	ctHotlistItems: 150 //4/2/18 by DW
 	};
 const fnameConfig = "config.json";
 
@@ -299,7 +302,7 @@ function addFeedToDatabase (feedUrl, callback) {
 		});
 	}
 function getHotlist (callback) {
-	const sqltext = "SELECT subscriptions.feedUrl, feeds.title, feeds.htmlUrl, COUNT(subscriptions.feedUrl) AS countSubs FROM subscriptions, feeds WHERE subscriptions.feedUrl = feeds.feedUrl and feeds.title is not null GROUP BY feedUrl ORDER BY countSubs DESC LIMIT 100;";
+	const sqltext = "SELECT subscriptions.feedUrl, feeds.title, feeds.htmlUrl, COUNT(subscriptions.feedUrl) AS countSubs FROM subscriptions, feeds WHERE subscriptions.feedUrl = feeds.feedUrl and feeds.title is not null GROUP BY feedUrl ORDER BY countSubs DESC LIMIT " + config.ctHotlistItems + ";";
 	runSqltext (sqltext, function (result) {
 		callback (result);
 		});
@@ -667,6 +670,35 @@ function readOpmlSubscriptionList (f, flExpandIncludes, callback) { //read OPML 
 			}
 		}, flExpandIncludes);
 	}
+
+
+function processOneFeed (screenname, fname, feedUrl, callback) {
+	if (fname === undefined) {
+		fname = config.defaultListName;
+		}
+	derefUrl (feedUrl, function (err, newUrl) { 
+		if (!err) {
+			feedUrl = newUrl;
+			}
+		getFeedInfoFromDatabase (feedUrl, function (err, info) {
+			if (err) { //not in database
+				addFeedToDatabase (feedUrl, function (addResult) {
+					addToLog (screenname, "new feed", feedUrl);
+					addSubscriptionToDatabase (screenname, fname, feedUrl, function (result) {
+						callback (result);
+						});
+					});
+				}
+			else {
+				addSubscriptionToDatabase (screenname, fname, feedUrl, function (result) {
+					callback (result);
+					});
+				}
+			});
+		});
+	}
+
+
 function processOpmlFile (f, screenname, callback) { //what we do when the user submits an OPML file
 	readOpmlSubscriptionList (f, false, function (feedlist) {
 		if (feedlist !== undefined) {
@@ -674,25 +706,8 @@ function processOpmlFile (f, screenname, callback) { //what we do when the user 
 			function doNextFeed (ix) {
 				if (ix < feedlist.length) {
 					var feedUrl = feedlist [ix];
-					derefUrl (feedUrl, function (err, newUrl) { //4/1/18 by DW
-						if (!err) {
-							feedUrl = newUrl;
-							}
-						getFeedInfoFromDatabase (feedUrl, function (err, info) {
-							if (err) { //not in database
-								addFeedToDatabase (feedUrl, function (addResult) {
-									addToLog (screenname, "new feed", feedUrl);
-									addSubscriptionToDatabase (screenname, fname, feedUrl, function () {
-										doNextFeed (ix + 1);
-										});
-									});
-								}
-							else {
-								addSubscriptionToDatabase (screenname, fname, feedUrl, function () {
-									doNextFeed (ix + 1);
-									});
-								}
-							});
+					processOneFeed (screenname, fname, feedUrl, function () {
+						doNextFeed (ix + 1);
 						});
 					}
 				else {
@@ -768,8 +783,7 @@ function logUnsubscribe (screenname, feedUrl) {
 		});
 	}
 function subscribe (screenname, feedUrl, callback) {
-	logSubscribe (screenname, feedUrl);
-	addSubscriptionToDatabase (screenname, null, feedUrl, callback);
+	processOneFeed (screenname, undefined, feedUrl, callback);
 	}
 function unsubscribe (screenname, feedUrl, callback) {
 	var sqltext = "delete from subscriptions where username = " + encode (screenname) + " and feedUrl = " + encode (feedUrl) + ";";
@@ -1026,6 +1040,7 @@ function handleHttpRequest (theRequest) {
 			callWithScreenname (function (screenname) {
 				subscribe (screenname, theRequest.params.feedurl, function (result) {
 					updateUserOpml (screenname);
+					returnData (result);
 					});
 				});
 			return (true); //we handled it
