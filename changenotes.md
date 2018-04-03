@@ -1,3 +1,7 @@
+### No more updates here
+
+I'm posting updates on <a href="http://scripting.com/">my blog</a>. 
+
 ### 0.5.8 -- 3/10/18 by DW
 
 There have been lots of changes, unfortunately not recorded. 
