@@ -670,9 +670,7 @@ function readOpmlSubscriptionList (f, flExpandIncludes, callback) { //read OPML 
 			}
 		}, flExpandIncludes);
 	}
-
-
-function processOneFeed (screenname, fname, feedUrl, callback) {
+function subscribeToFeed (screenname, fname, feedUrl, callback) {
 	if (fname === undefined) {
 		fname = config.defaultListName;
 		}
@@ -697,8 +695,6 @@ function processOneFeed (screenname, fname, feedUrl, callback) {
 			});
 		});
 	}
-
-
 function processOpmlFile (f, screenname, callback) { //what we do when the user submits an OPML file
 	readOpmlSubscriptionList (f, false, function (feedlist) {
 		if (feedlist !== undefined) {
@@ -706,7 +702,7 @@ function processOpmlFile (f, screenname, callback) { //what we do when the user 
 			function doNextFeed (ix) {
 				if (ix < feedlist.length) {
 					var feedUrl = feedlist [ix];
-					processOneFeed (screenname, fname, feedUrl, function () {
+					subscribeToFeed (screenname, fname, feedUrl, function () {
 						doNextFeed (ix + 1);
 						});
 					}
@@ -783,7 +779,7 @@ function logUnsubscribe (screenname, feedUrl) {
 		});
 	}
 function subscribe (screenname, feedUrl, callback) {
-	processOneFeed (screenname, undefined, feedUrl, callback);
+	subscribeToFeed (screenname, undefined, feedUrl, callback);
 	}
 function unsubscribe (screenname, feedUrl, callback) {
 	var sqltext = "delete from subscriptions where username = " + encode (screenname) + " and feedUrl = " + encode (feedUrl) + ";";
