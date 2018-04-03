@@ -1,4 +1,4 @@
-### No more updates here
+# No more updates here
 
 I'm posting updates on <a href="http://scripting.com/">my blog</a>. 
 
