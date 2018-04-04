@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.6.8";     
+var myProductName = "feedBase", myVersion = "0.6.9";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -279,7 +279,11 @@ function addFeedToDatabase (feedUrl, callback) {
 					var sqltext = "replace into feeds " + encodeValues (values);
 					stats.lastFeedUpdate = values;
 					runSqltext (sqltext, function (result) {
-						resetFeedSubCount (feedUrl, callback);
+						resetFeedSubCount (feedUrl, function () {
+							if (callback !== undefined) {
+								callback (values);
+								}
+							});
 						});
 					}
 				if (info !== undefined) {
@@ -347,7 +351,7 @@ function updateLog (whenClientLastUpdate, callback) { //3/28/18 by DW
 	callback (returnData);
 	}
 function getKnownFeeds (callback) {
-	var sqltext = "select distinct feedUrl from subscriptions;";
+	var sqltext = "select feedUrl from feeds where code = 200;";
 	runSqltext (sqltext, function (result) {
 		var feeds = new Array ();
 		for (var i = 0; i < result.length; i++) {
@@ -498,6 +502,15 @@ function getUsersWhoFollowFeed (feedUrl, callback) {
 		callback (userarray);
 		});
 	}
+function updateOneFeed (feedUrl, callback) {
+	addFeedToDatabase (feedUrl, function (addResult) {
+		saveFeedInfoJson (feedUrl, function () {
+			if (callback !== undefined) {
+				callback (addResult);
+				}
+			});
+		});
+	}
 function updateLeastRecentlyUpdatedFeed (callback) {
 	var sqltext = "SELECT * FROM feeds ORDER BY whenUpdated ASC LIMIT 1;";
 	runSqltext (sqltext, function (result) {
@@ -505,13 +518,7 @@ function updateLeastRecentlyUpdatedFeed (callback) {
 			var theFeed = result [0];
 			var secsSinceUpdate = utils.secondsSince (theFeed.whenUpdated);
 			if (secsSinceUpdate >= config.minSecsBetwSingleFeedUpdate) {
-				addFeedToDatabase (theFeed.feedUrl, function (addResult) {
-					saveFeedInfoJson (theFeed.feedUrl, function () {
-						if (callback !== undefined) {
-							callback (result);
-							}
-						});
-					});
+				updateOneFeed (theFeed.feedUrl, callback);
 				}
 			}
 		});
@@ -1015,7 +1022,7 @@ function handleHttpRequest (theRequest) {
 				});
 			return (true); //we handled it
 		case "/ping":
-			updateThisFeed (theRequest.params.feedurl, function (result) {
+			updateOneFeed (theRequest.params.feedurl, function (result) {
 				returnData (result);
 				});
 			return (true); //we handled it
