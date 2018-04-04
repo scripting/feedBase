@@ -113,6 +113,7 @@ function doBackup () {
 	var whenstart = new Date ();
 	backupFeeds (function (theFeeds) {
 		writeBackupFile (theFeeds, "feeds.json", function () {
+			theFeeds = []; //reclaim memory used by the array
 			backupSubscriptions (function (theSubs) {
 				writeBackupFile (theSubs, "subscriptions.json", function () {
 					console.log ("doBackup: backup took " + utils.secondsSince (whenstart) + " secs.");
