@@ -6,6 +6,7 @@
 	"dependencies" : {
 		"mysql": "*",
 		"daveutils": "*",
+		"dateformat": "*",
 		"daves3": "*"
 		}, 
 	"license": "MIT",
