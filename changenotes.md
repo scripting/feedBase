@@ -1,6 +1,20 @@
-# No more updates here
+### 0.6.11 -- 4/6/18 by DW
 
-I'm posting updates on <a href="http://scripting.com/">my blog</a>. 
+Unicode in feedBase. It wasn't easy, but it appears to be done. This is what we did. 
+
+1. Added <i>charset</i> value of utf8mb4 to the database object in config.json. 
+
+2. Ran 4 commands at the mysql command line. 
+
+ALTER DATABASE feedbase CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+ALTER TABLE feeds CHANGE title title VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+ALTER TABLE feeds CHANGE description description VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+ALTER TABLE subscriptions CHANGE username username VARCHAR(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+3. Installed the new version of feedBase that now uses the xxx package to read feeds. It respects the charset value in the content-type header. 
 
 ### 0.5.8 -- 3/10/18 by DW
 
