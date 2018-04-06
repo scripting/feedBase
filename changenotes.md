@@ -22,6 +22,8 @@ A megathread in the issues part of the feedBase repo, and many thanks to JYSterv
 
 There was even a <a href="http://scripting.com/2018/04/06.html#a153548">podcast</a> done in the process of getting this to work! :rocket:
 
+Also <a href="https://mathiasbynens.be/notes/mysql-utf8mb4">this post</a> was very helpful in providing the full picture. 
+
 ### 0.5.8 -- 3/10/18 by DW
 
 There have been lots of changes, unfortunately not recorded. 
