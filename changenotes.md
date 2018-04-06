@@ -18,6 +18,10 @@ Unicode in feedBase. It wasn't easy, but it appears to be done. This is what we 
 
 4. Got my backup/restore act together so if any of these changed did harm to the database we'd have a chance of restoring things. 
 
+A megathread in the issues part of the feedBase repo, and many thanks to JYStervinou and Thejeshgn. 
+
+There was even a <a href="http://scripting.com/2018/04/06.html#a153548">podcast</a> done in the process of getting this to work! :rocket:
+
 ### 0.5.8 -- 3/10/18 by DW
 
 There have been lots of changes, unfortunately not recorded. 
