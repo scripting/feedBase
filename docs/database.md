@@ -92,3 +92,7 @@ create table subscriptions (
 
 ```
 
+### Getting Unicode support in
+
+See these <a href="https://github.com/scripting/feedbase/blob/master/changenotes.md#0611----4618-by-dw">notes</a> on what we had to do to get Unicode in the text bits in the database. 
+
