@@ -6,13 +6,13 @@ Unicode in feedBase. It wasn't easy, but it appears to be done. This is what we 
 
 2. Ran 4 commands at the mysql command line. 
 
-ALTER DATABASE feedbase CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+* ALTER DATABASE feedbase CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
-ALTER TABLE feeds CHANGE title title VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+* ALTER TABLE feeds CHANGE title title VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-ALTER TABLE feeds CHANGE description description VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+* ALTER TABLE feeds CHANGE description description VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-ALTER TABLE subscriptions CHANGE username username VARCHAR(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+* ALTER TABLE subscriptions CHANGE username username VARCHAR(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 3. Installed the new version of feedBase that now uses the <a href="https://www.npmjs.com/package/davefeedread">davefeedread</a> package to read feeds. It respects the charset value in the content-type header. 
 
