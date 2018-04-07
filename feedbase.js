@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.6.9";     
+var myProductName = "feedBase", myVersion = "0.6.12";     
 
 const mysql = require ("mysql");
 const utils = require ("daveutils");
@@ -35,7 +35,8 @@ var config = {
 	
 	requestTimeoutSecs: 3,
 	homepage: {
-		pagetitle: "feedBase"
+		pagetitle: "feedBase",
+		urlTwitterServer: "http://feedbase.io/"
 		},
 	urlFavicon: "http://scripting.com/favicon.ico",
 	urlServerHomePageSource: "http://scripting.com/code/syo/index.html",
@@ -45,7 +46,10 @@ var config = {
 	hotlistTitle: "feedBase hotlist in OPML",
 	s3HotlistPath: "hotlist.opml",
 	
-	ctHotlistItems: 150 //4/2/18 by DW
+	ctHotlistItems: 150, //4/2/18 by DW
+	
+	maxLengthFeedDescription: 512, //4/5/18 by DW
+	maxLengthFeedTitle: 255 //4/5/18 by DW
 	};
 const fnameConfig = "config.json";
 
@@ -149,6 +153,7 @@ function encodeValues (values) {
 function runSqltext (s, callback) {
 	theSqlConnectionPool.getConnection (function (err, connection) {
 		if (err) {
+			console.log ("runSqltext: s == " + s);
 			console.log ("runSqltext: err.code == " + err.code + ", err.message == " + err.message);
 			}
 		else {
@@ -287,9 +292,9 @@ function addFeedToDatabase (feedUrl, callback) {
 						});
 					}
 				if (info !== undefined) {
-					values.title = info.title;
+					values.title = utils.maxStringLength (info.title, config.maxLengthFeedTitle, true, true); 
 					values.htmlUrl = info.htmlUrl;
-					values.description = info.description;
+					values.description = utils.maxStringLength (info.description, config.maxLengthFeedDescription, true, true); 
 					values.ctConsecutiveErrors = 0;
 					}
 				else {
