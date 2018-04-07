@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.6.12";     
+var myProductName = "feedBase", myVersion = "0.6.14";     
 
 /*  The MIT License (MIT)
 	Copyright (c) 2014-2018 Dave Winer
@@ -36,6 +36,7 @@ const crypto = require ("crypto");
 const feedRead = require ("davefeedread"); //3/31/18 by DW
 
 var config = {
+	flFeedUpdates: true, //if false we don't check feeds for changed info, useful for test servers -- 4/7/18 by DW
 	ctSecsBetwFeedUpdates: 15,
 	minSecsBetwSingleFeedUpdate: 60 * 15, //at least 15 minutes betw checks for each feed
 	outlineImportFolder: "outlines/",
@@ -53,7 +54,6 @@ var config = {
 	
 	opmlS3path: "/opml.feedbase.io/", //2/28/18 by DW -- where we save each users' OPML file
 	opmlS3url: "http://opml.feedbase.io/",
-	
 	
 	requestTimeoutSecs: 3,
 	homepage: {
@@ -1232,14 +1232,16 @@ function everyMinute () {
 		}
 	}
 function everySecond () {
-	if (utils.secondsSince (stats.whenLastFeedUpdate) > config.ctSecsBetwFeedUpdates) {
-		stats.whenLastFeedUpdate = new Date ();
-		updateLeastRecentlyUpdatedFeed (function () {
-			stats.ctFeedUpdates++;
-			stats.ctFeedUpdatesToday++;
-			stats.ctFeedUpdatesThisRun++;
-			statsChanged ();
-			});
+	if (config.flFeedUpdates) {
+		if (utils.secondsSince (stats.whenLastFeedUpdate) > config.ctSecsBetwFeedUpdates) {
+			stats.whenLastFeedUpdate = new Date ();
+			updateLeastRecentlyUpdatedFeed (function () {
+				stats.ctFeedUpdates++;
+				stats.ctFeedUpdatesToday++;
+				stats.ctFeedUpdatesThisRun++;
+				statsChanged ();
+				});
+			}
 		}
 	if (flStatsChanged) {
 		flStatsChanged = false;
