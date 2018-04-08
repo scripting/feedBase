@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.6.14";     
+var myProductName = "feedBase", myVersion = "0.6.15";     
 
 /*  The MIT License (MIT)
 	Copyright (c) 2014-2018 Dave Winer
@@ -71,7 +71,19 @@ var config = {
 	ctHotlistItems: 150, //4/2/18 by DW
 	
 	maxLengthFeedDescription: 512, //4/5/18 by DW
-	maxLengthFeedTitle: 255 //4/5/18 by DW
+	maxLengthFeedTitle: 255, //4/5/18 by DW
+	
+	duplicateUrlMap: { //4/8/18 by DW
+		"http://www.scripting.com/rss.xml": "http://scripting.com/rss.xml",
+		"http://ranchero.com/xml/rss.xml": "http://inessential.com/xml/rss.xml",
+		"https://daringfireball.net/feeds/main": "http://daringfireball.net/index.xml",
+		"http://daringfireball.net/feeds/main": "http://daringfireball.net/index.xml",
+		"http://feeds.feedburner.com/codinghorror": "http://feeds.feedburner.com/codinghorror/",
+		"http://xkcd.com/atom.xml": "http://xkcd.com/rss.xml",
+		"https://xkcd.com/rss.xml": "http://xkcd.com/rss.xml",
+		"http://randsinrepose.com/feed/": "http://www.randsinrepose.com/index.xml",
+		"https://www.joelonsoftware.com/feed/": "http://www.joelonsoftware.com/rss.xml"
+		}
 	};
 const fnameConfig = "config.json";
 
@@ -332,9 +344,27 @@ function addFeedToDatabase (feedUrl, callback) {
 			});
 		});
 	}
+function adjustHotlistCounts (theList) {
+	var addCounts = new Object ();
+	for (var i = theList.length - 1; i >= 0; i--) {
+		var item = theList [i], realUrl = config.duplicateUrlMap [item.feedUrl];
+		if (realUrl !== undefined) {
+			addCounts [realUrl] = item.countSubs;
+			theList.splice (i, 1);
+			}
+		}
+	console.log ("adjustCounts: addCounts == " + utils.jsonStringify (addCounts));
+	for (var i = 0; i < theList.length; i++) { //4/8/18 by DW
+		var item = theList [i];
+		if (addCounts [item.feedUrl] !== undefined) {
+			item.countSubs += addCounts [item.feedUrl];
+			}
+		}
+	}
 function getHotlist (callback) {
 	const sqltext = "SELECT subscriptions.feedUrl, feeds.title, feeds.htmlUrl, COUNT(subscriptions.feedUrl) AS countSubs FROM subscriptions, feeds WHERE subscriptions.feedUrl = feeds.feedUrl and feeds.title is not null GROUP BY feedUrl ORDER BY countSubs DESC LIMIT " + config.ctHotlistItems + ";";
 	runSqltext (sqltext, function (result) {
+		adjustHotlistCounts (result); //4/8/18 by DW
 		callback (result);
 		});
 	}
