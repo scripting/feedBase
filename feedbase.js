@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.6.15";     
+var myProductName = "feedBase", myVersion = "0.6.16";     
 
 /*  The MIT License (MIT)
 	Copyright (c) 2014-2018 Dave Winer
@@ -1085,11 +1085,6 @@ function handleHttpRequest (theRequest) {
 			return (true); //we handled it
 		case "/getfollowers":
 			getUsersWhoFollowFeed (theRequest.params.feedurl, function (result) {
-				returnData (result);
-				});
-			return (true); //we handled it
-		case "/knownfeeds":
-			getKnownFeeds (function (result) {
 				returnData (result);
 				});
 			return (true); //we handled it
