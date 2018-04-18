@@ -1,6 +1,6 @@
-var myProductName = "feedBase", myVersion = "0.6.16";     
+var myProductName = "feedBase", myVersion = "0.6.17";     
 
-/*  The MIT License (MIT)
+/*  The MIT License (MIT) 
 	Copyright (c) 2014-2018 Dave Winer
 	
 	Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -353,7 +353,6 @@ function adjustHotlistCounts (theList) {
 			theList.splice (i, 1);
 			}
 		}
-	console.log ("adjustCounts: addCounts == " + utils.jsonStringify (addCounts));
 	for (var i = 0; i < theList.length; i++) { //4/8/18 by DW
 		var item = theList [i];
 		if (addCounts [item.feedUrl] !== undefined) {
@@ -553,8 +552,10 @@ function getUsersWhoFollowFeed (feedUrl, callback) {
 	var sqltext = "select username from subscriptions where feedUrl=" + encode (feedUrl) + ";";
 	runSqltext (sqltext, function (result) {
 		var userarray = new Array ();
-		for (var i = 0; i < result.length; i++) {
-			userarray.push (result [i].username);
+		if (result !== undefined) { //4/17/18 by DW
+			for (var i = 0; i < result.length; i++) {
+				userarray.push (result [i].username);
+				}
 			}
 		callback (userarray);
 		});
@@ -619,60 +620,6 @@ function resetAllSubCounts (callback) {
 			}
 		doNextFeed (0);
 		});
-	}
-function readFeed (feedUrl, callback) {
-	try {
-		var requestOptions = {
-			url: feedUrl,
-			timeout: config.requestTimeoutSecs * 1000
-			};
-		var req = request (requestOptions);
-		var feedparser = new feedParser ();
-		var feedItems = new Array ();
-		req.on ("response", function (response) {
-			var stream = this;
-			if (response.statusCode == 200) {
-				stream.pipe (feedparser);
-				}
-			else {
-				console.log ("readFeed error #1: feedUrl == " + feedUrl + ", response.statusCode == " + response.statusCode);
-				callback (undefined, response);
-				}
-			});
-		req.on ("error", function (err) {
-			var response = {
-				statusCode: 400 //something like ENOTFOUND or ETIMEDOUT
-				};
-			console.log ("readFeed error #2: feedUrl == " + feedUrl + " err.code == " + err.code);
-			callback (undefined, response);
-			});
-		feedparser.on ("readable", function () {
-			try {
-				var item = this.read (), flnew;
-				if (item !== null) {
-					feedItems.push (item);
-					}
-				}
-			catch (err) {
-				console.log ("readFeed: error == " + err.message);
-				}
-			});
-		feedparser.on ("error", function () {
-			});
-		feedparser.on ("end", function () {
-			var response = {
-				statusCode: 200 
-				};
-			callback (feedItems, response);
-			});
-		}
-	catch (err) {
-		var response = {
-			statusCode: 400 //something like ENOTFOUND or ETIMEDOUT
-			};
-		console.log ("readFeed: err.message == " + err.message);
-		callback (undefined, response);
-		}
 	}
 function getFeedInfo (feedUrl, callback) {
 	feedRead.parseUrl (feedUrl, config.requestTimeoutSecs, function (err, theFeed, httpResponse) {
@@ -843,14 +790,27 @@ function logUnsubscribe (screenname, feedUrl) {
 		});
 	}
 function subscribe (screenname, feedUrl, callback) {
-	subscribeToFeed (screenname, undefined, feedUrl, callback);
+	
+	console.log ("subscribe: screenname == " + screenname + ", feedUrl == " + feedUrl);
+	
+	subscribeToFeed (screenname, undefined, feedUrl, function () {
+		resetFeedSubCount (feedUrl, function () {
+			if (callback !== undefined) {
+				callback ();
+				}
+			});
+		});
 	}
 function unsubscribe (screenname, feedUrl, callback) {
 	var sqltext = "delete from subscriptions where username = " + encode (screenname) + " and feedUrl = " + encode (feedUrl) + ";";
 	hotlistChanged ();
 	logUnsubscribe (screenname, feedUrl);
 	runSqltext (sqltext, function (result) {
-		callback (result);
+		resetFeedSubCount (feedUrl, function () {
+			if (callback !== undefined) {
+				callback (result);
+				}
+			});
 		});
 	}
 function isSubscribed (screenname, feedUrl, callback) {
@@ -992,6 +952,12 @@ function handleHttpRequest (theRequest) {
 		theRequest.httpReturn (code, "text/plain", code + " REDIRECT");
 		}
 		
+	function returnFeedInfo (feedUrl) {
+		getFeedInfoFromDatabase (feedUrl, function (err, result) {
+			console.log ("returnFeedInfo: result == " + utils.jsonStringify (result));
+			httpReturn (err, result);
+			});
+		}
 	function getSqlResult (sqltext, callback) {
 		theSqlConnectionPool.getConnection (function (err, connection) {
 			if (err) {
@@ -1095,7 +1061,7 @@ function handleHttpRequest (theRequest) {
 			callWithScreenname (function (screenname) {
 				subscribe (screenname, theRequest.params.feedurl, function (result) {
 					updateUserOpml (screenname);
-					returnData (result);
+					returnFeedInfo (theRequest.params.feedurl);
 					});
 				});
 			return (true); //we handled it
@@ -1103,6 +1069,7 @@ function handleHttpRequest (theRequest) {
 			callWithScreenname (function (screenname) {
 				unsubscribe (screenname, theRequest.params.feedurl, function (result) {
 					updateUserOpml (screenname);
+					returnFeedInfo (theRequest.params.feedurl);
 					});
 				});
 			return (true); //we handled it
