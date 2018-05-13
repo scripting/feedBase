@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.6.17";     
+var myProductName = "feedBase", myVersion = "0.6.20";     
 
 /*  The MIT License (MIT) 
 	Copyright (c) 2014-2018 Dave Winer
@@ -44,7 +44,7 @@ var config = {
 	fnamePrefs: "prefs.json", //each user's prefs file
 	fnameOpml: "subs.opml",
 	fnameLastUploadedOpml: "lastUploaded.opml", 
-	defaultListName: "default.opml",
+	defaultListName: "main.opml",
 	fnameS3backup: "s3Backup.opml",
 	fnameStats: "data/stats.json", //stats for the app
 	fnameLog: "data/log.json", 
@@ -75,14 +75,25 @@ var config = {
 	
 	duplicateUrlMap: { //4/8/18 by DW
 		"http://www.scripting.com/rss.xml": "http://scripting.com/rss.xml",
+		
 		"http://ranchero.com/xml/rss.xml": "http://inessential.com/xml/rss.xml",
-		"https://daringfireball.net/feeds/main": "http://daringfireball.net/index.xml",
-		"http://daringfireball.net/feeds/main": "http://daringfireball.net/index.xml",
+		
+		"https://daringfireball.net/feeds/main": "http://daringfireball.net/feeds/main",
+		"http://daringfireball.net/index.xml": "http://daringfireball.net/feeds/main",
+		"http://daringfireball.net/feeds/main": "http://daringfireball.net/feeds/main",
+		
 		"http://feeds.feedburner.com/codinghorror": "http://feeds.feedburner.com/codinghorror/",
+		
 		"http://xkcd.com/atom.xml": "http://xkcd.com/rss.xml",
 		"https://xkcd.com/rss.xml": "http://xkcd.com/rss.xml",
-		"http://randsinrepose.com/feed/": "http://www.randsinrepose.com/index.xml",
-		"https://www.joelonsoftware.com/feed/": "http://www.joelonsoftware.com/rss.xml"
+		
+		"http://www.randsinrepose.com/index.xml": "http://randsinrepose.com/feed/",
+		
+		"http://www.marco.org/rss": "http://marco.org/rss",
+		
+		"http://scobleizer.com/feed/": "http://scobleizer.blog/feed/",
+		
+		"http://www.joelonsoftware.com/rss.xml": "https://www.joelonsoftware.com/feed/"
 		}
 	};
 const fnameConfig = "config.json";
@@ -123,6 +134,10 @@ var flHotlistChanged = false;
 function hashMD5 (s) {
 	return (crypto.createHash ("md5").update (s).digest ("hex"));
 	}
+function popProtocol (url) { //remove "http" from the beginning of http://xxx.yyy
+	var protocol = utils.stringNthField (url, ":", 1);
+	return (utils.stringDelete (url, 1, protocol.length));
+	}
 function derefUrl (url, callback) {
 	var theRequest = {
 		method: "HEAD", 
@@ -135,7 +150,11 @@ function derefUrl (url, callback) {
 			callback (err);
 			}
 		else {
-			callback (undefined, response.request.href);
+			var newUrl = response.request.href;
+			if (popProtocol (newUrl) == popProtocol (url)) {
+				newUrl = url;
+				}
+			callback (undefined, newUrl);
 			}
 		});
 	}
@@ -438,7 +457,7 @@ function deleteSubscriptions (username, callback) {
 		});
 	}
 function getUserSubscriptions (username, callback) {
-	var sqltext = "SELECT s.feedUrl, f.title, f.htmlUrl, f.countSubs FROM subscriptions AS s, feeds AS f WHERE s.feedUrl = f.feedUrl AND f.title is not null AND s.username = " + encode (username) + " ORDER BY s.whenUpdated DESC;";
+	var sqltext = "SELECT s.feedUrl, s.listname, f.title, f.htmlUrl, f.countSubs FROM subscriptions AS s, feeds AS f WHERE s.feedUrl = f.feedUrl AND f.title is not null AND s.username = " + encode (username) + " ORDER BY s.whenUpdated DESC;";
 	runSqltext (sqltext, function (result) {
 		callback (result);
 		});
@@ -689,6 +708,9 @@ function subscribeToFeed (screenname, fname, feedUrl, callback) {
 		if (!err) {
 			feedUrl = newUrl;
 			}
+		
+		console.log ("subscribeToFeed: newUrl == " + newUrl);
+		
 		getFeedInfoFromDatabase (feedUrl, function (err, info) {
 			if (err) { //not in database
 				addFeedToDatabase (feedUrl, function (addResult) {
@@ -850,6 +872,14 @@ function getUserOpml (screenname, callback) {
 		});
 	}
 function saveUserOpml (screenname, opmltext, callback) {
+	var opmlFile = config.usersFolder + screenname + "/" + config.fnameOpml;
+	utils.sureFilePath (opmlFile, function () {
+		fs.writeFile (opmlFile, opmltext, function (err) {
+			callback (err, true);
+			});
+		});
+	}
+function userUploadedOpml (screenname, opmltext, callback) { //called when the user drag-drops an OPML file -- 4/26/18 by DW
 	var opmlFile = config.usersFolder + screenname + "/" + config.fnameLastUploadedOpml;
 	utils.sureFilePath (opmlFile, function () {
 		fs.writeFile (opmlFile, opmltext, function (err) {
@@ -1049,6 +1079,11 @@ function handleHttpRequest (theRequest) {
 				returnData (result);
 				});
 			return (true); //we handled it
+		case "/deref": //4/19/18 by DW
+			derefUrl (theRequest.params.url, function (err, url) {
+				httpReturn (err, url);
+				});
+			return (true); //we handled it
 		case "/getfollowers":
 			getUsersWhoFollowFeed (theRequest.params.feedurl, function (result) {
 				returnData (result);
@@ -1112,7 +1147,7 @@ function handleHttpRequest (theRequest) {
 		case "/saveopml":
 			callWithScreenname (function (screenname) {
 				console.log ("/saveopml: theRequest.postBody.length == " + theRequest.postBody.length);
-				saveUserOpml (screenname, theRequest.postBody, function (err, result) {
+				userUploadedOpml (screenname, theRequest.postBody, function (err, result) {
 					updateUserOpml (screenname);
 					});
 				});
@@ -1146,6 +1181,20 @@ function handleHttpRequest (theRequest) {
 		case "/favicon.ico":
 			returnRedirect (config.urlFavicon);
 			break;
+		case "/geteditoropml":
+			callWithScreenname (function (screenname) {
+				getUserOpml (screenname, function (result) {
+					 returnData (result);
+					});
+				});
+			return (true); //we handled it
+		case "/saveeditoropml":
+			callWithScreenname (function (screenname) {
+				saveUserOpml (screenname, theRequest.postBody, function (err, result) {
+					httpReturn (err, result);
+					});
+				});
+			return (true); //we handled it
 		}
 	return (false); //we didn't handle it
 	}
