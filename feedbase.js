@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.6.20";     
+var myProductName = "feedBase", myVersion = "0.6.21";
 
 /*  The MIT License (MIT) 
 	Copyright (c) 2014-2018 Dave Winer
@@ -479,23 +479,44 @@ function getOpmlFromArray (title, whenCreated, feedsArray) {
 	//add head
 		add ("<head>"); indentlevel++;
 		add ("<title>" + encode (title) + "</title>");
-		add ("<dateCreated>" + new Date (whenCreated).toUTCString () + "</dateCreated>");
+		if (whenCreated !== undefined) {
+			add ("<dateCreated>" + new Date (whenCreated).toUTCString () + "</dateCreated>");
+			}
 		add ("<dateModified>" + now.toUTCString () + "</dateModified>");
 		add ("</head>"); indentlevel--;
 	add ("<body>"); indentlevel++;
 	//add the <outline> elements
-		for (i = 0; i < feedsArray.length; i++) {
-			var feed = feedsArray [i];
-			function att (name, val) {
-				if ((val === undefined) || (val === null)) {
-					return ("");
+		function att (name, val) {
+			if ((val === undefined) || (val === null)) {
+				return ("");
+				}
+			else {
+				return (" " + name + "=\"" + utils.encodeXml (val) + "\"");
+				}
+			}
+		function addOneSub (theSub) {
+			//there are two possible kinds of nodes here, we handle both -- 5/14/18 by DW
+			if (theSub.feedUrl !== undefined) {
+				add ("<outline type=\"rss\"" + att ("text", theSub.title) + att ("xmlUrl", theSub.feedUrl) + att ("htmlUrl", theSub.htmlUrl) +  " />");
+				}
+			else {
+				add ("<outline type=\"rss\"" + att ("text", theSub.title) + att ("xmlUrl", theSub.xmlurl) + att ("htmlUrl", theSub.htmlurl) +  " />");
+				}
+			}
+		function addSubs (subs) {
+			for (var i = 0; i < subs.length; i++) {
+				var feed = subs [i];
+				if (feed.subs !== undefined) {
+					add ("<outline" + att ("text", feed.text) + ">"); indentlevel++;
+					addSubs (feed.subs);
+					add ("</outline>"); indentlevel--;
 					}
 				else {
-					return (" " + name + "=\"" + utils.encodeXml (val) + "\"");
+					addOneSub (feed);
 					}
 				}
-			add ("<outline type=\"rss\"" + att ("text", feed.title) + att ("xmlUrl", feed.feedUrl) + att ("htmlUrl", feed.htmlUrl) +  " />");
 			}
+		addSubs (feedsArray);
 	add ("</body>"); indentlevel--;
 	add ("</opml>"); indentlevel--;
 	return (opmltext);
@@ -700,32 +721,83 @@ function readOpmlSubscriptionList (f, flExpandIncludes, callback) { //read OPML 
 			}
 		}, flExpandIncludes);
 	}
+
+
+function processListOfLists (screenname, opmltext, callback) { //5/14/18 by DW
+	const flExpandIncludes = false;
+	function saveFile (fname, subs, callback) {
+		var opmltext = getOpmlFromArray (fname, undefined, subs);
+		var path = config.opmlS3path + screenname + "/" + fname;
+		s3.newObject (path, opmltext, "text/xml", "public-read", function (err, data) {
+			console.log ("processListOfLists: url == http:/" + path);
+			var f = config.usersFolder + screenname + "/" + fname; 
+			utils.sureFilePath (f, function () {
+				fs.writeFile (f, opmltext, function (err) {
+					if (callback !== undefined) {
+						callback ();
+						}
+					});
+				});
+			});
+		}
+	opml.readOpmlString (opmltext, function (theOutline) {
+		var filelist = new Array ();
+		if (theOutline !== undefined) {
+			if (theOutline.subs !== undefined) {
+				for (var i = 0; i < theOutline.subs.length; i++) {
+					var node = theOutline.subs [i];
+					if (node.xmlurl === undefined) { //it's not a subscription
+						if (utils.endsWith (node.text, ".opml")) {
+							filelist.push (node.text);
+							saveFile (node.text, node.subs);
+							}
+						}
+					}
+				}
+			callback (undefined, filelist);
+			}
+		else {
+			callback ({message: "Error processing the OPML text."});
+			}
+		}, flExpandIncludes);
+	}
+
+
 function subscribeToFeed (screenname, fname, feedUrl, callback) {
-	if (fname === undefined) {
+	if (true) { //(fname === undefined) {
 		fname = config.defaultListName;
 		}
-	derefUrl (feedUrl, function (err, newUrl) { 
-		if (!err) {
-			feedUrl = newUrl;
+	getFeedInfoFromDatabase (feedUrl, function (err, info) {
+		if (err) {  //not in database
+			derefUrl (feedUrl, function (err, newUrl) { 
+				if (!err) {
+					feedUrl = newUrl;
+					}
+				
+				console.log ("subscribeToFeed: newUrl == " + newUrl);
+				
+				getFeedInfoFromDatabase (feedUrl, function (err, info) {
+					if (err) { //not in database
+						addFeedToDatabase (feedUrl, function (addResult) {
+							addToLog (screenname, "new feed", feedUrl);
+							addSubscriptionToDatabase (screenname, fname, feedUrl, function (result) {
+								callback (result);
+								});
+							});
+						}
+					else {
+						addSubscriptionToDatabase (screenname, fname, feedUrl, function (result) {
+							callback (result);
+							});
+						}
+					});
+				});
 			}
-		
-		console.log ("subscribeToFeed: newUrl == " + newUrl);
-		
-		getFeedInfoFromDatabase (feedUrl, function (err, info) {
-			if (err) { //not in database
-				addFeedToDatabase (feedUrl, function (addResult) {
-					addToLog (screenname, "new feed", feedUrl);
-					addSubscriptionToDatabase (screenname, fname, feedUrl, function (result) {
-						callback (result);
-						});
-					});
-				}
-			else {
-				addSubscriptionToDatabase (screenname, fname, feedUrl, function (result) {
-					callback (result);
-					});
-				}
-			});
+		else {
+			addSubscriptionToDatabase (screenname, fname, feedUrl, function (result) {
+				callback (result);
+				});
+			}
 		});
 	}
 function processOpmlFile (f, screenname, callback) { //what we do when the user submits an OPML file
@@ -1190,8 +1262,13 @@ function handleHttpRequest (theRequest) {
 			return (true); //we handled it
 		case "/saveeditoropml":
 			callWithScreenname (function (screenname) {
-				saveUserOpml (screenname, theRequest.postBody, function (err, result) {
-					httpReturn (err, result);
+				var opmltext = theRequest.postBody;
+				saveUserOpml (screenname, opmltext, function (err, result) {
+					userUploadedOpml (screenname, opmltext, function (err, result) {
+						processListOfLists (screenname, opmltext, function (err, filelist) {
+							httpReturn (err, result);
+							});
+						});
 					});
 				});
 			return (true); //we handled it
