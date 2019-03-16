@@ -1,3 +1,9 @@
+### 0.6.21 -- 3/16/19 by DW
+
+When you upload your OPML, the Show My OPML command in the Main menu is disabled. That's because appPrefs.xxx is undefined.
+
+This happens because we redirect to your subs page before the update to appPrefs is sent back to the server. 
+
 ### 0.6.11 -- 4/6/18 by DW
 
 Unicode in feedBase. It wasn't easy, but it appears to be done. This is what we did. 
