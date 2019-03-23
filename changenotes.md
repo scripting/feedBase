@@ -1,6 +1,6 @@
 ### 0.6.21 -- 3/16/19 by DW
 
-When you upload your OPML, the Show My OPML command in the Main menu is disabled. That's because appPrefs.xxx is undefined.
+When you upload your OPML, the View my OPML command in the Main menu is disabled. That's because appPrefs.opmlUrl is undefined.
 
 This happens because we redirect to your subs page before the update to appPrefs is sent back to the server. 
 
