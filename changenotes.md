@@ -1,6 +1,7 @@
-* ### 0.6.21 -- 3/16/19 by DW
+* ### 0.6.21 -- 3/26/19 by DW
    * Change in settings
       * The name of the "Reader URL" option was confusing, what it's really doing is providing a link for viewing the XML of a feed. This is necessary because browsers routinely try to provide a friendly display of a feed, when sometimes you need to see the XML of the feed itself.  I changed the label to "XML viewer URL" and the placeholder text changed from "URL of the app to read RSS feeds" to "URL of the app to view RSS feeds as XML."
+* ### 0.6.21 -- 3/16/19 by DW
    * When you upload your OPML, the View my OPML command in the Main menu is disabled. That's because appPrefs.opmlUrl is undefined.
       * This happens because we redirect to your subs page before the update to appPrefs is sent back to the server. 
 * ### 0.6.11 -- 4/6/18 by DW
