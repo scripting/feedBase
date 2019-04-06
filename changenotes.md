@@ -1,3 +1,7 @@
+* ### 0.6.21 -- 4/6/19 by DW
+   * New <i>Add Feed</i> button
+      * A new button appears when you're viewing the page listing your feeds. When you click it, you get a dialog that asks for the URL of the feed you want to subscribe to. Enter the URL, we send the feed to the server, and report on whether or not we were able to subscribe, that is if there was an error reading the feed. 
+      * It only appears on your page because on other pages, the checkboxes work to subscribe to a feed someone else is subscribed to. It's the fastest way to add a new feed to your rotation, one of the reasons we have feedBase. ;-)
 * ### 0.6.21 -- 3/26/19 by DW
    * Change in settings
       * The name of the "Reader URL" option was confusing, what it's really doing is providing a link for viewing the XML of a feed. This is necessary because browsers routinely try to provide a "friendly" display of a feed, hiding the details, when sometimes you need to see the XML of the feed.  
