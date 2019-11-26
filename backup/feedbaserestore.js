@@ -127,12 +127,14 @@ function checkFeedQueue () { //called every tenth second
 function readFeeds (callback) {
 	fs.readFile (config.backupFolderPath + "feeds.json", function (err, jsontext) {
 		theFeeds = JSON.parse (jsontext);
+		console.log ("readFeeds: theFeeds.length == " + theFeeds.length);
 		callback ();
 		});
 	}
 function readSubscriptions (callback) {
 	fs.readFile (config.backupFolderPath + "subscriptions.json", function (err, jsontext) {
 		theSubscriptions = JSON.parse (jsontext);
+		console.log ("readSubscriptions: theSubscriptions.length == " + theSubscriptions.length);
 		callback ();
 		});
 	}

@@ -54,7 +54,7 @@ create table feeds (
 
       htmlUrl varchar (512), 
 
-      description varchar (512), 
+      description text, 
 
       whenUpdated datetime, 
 

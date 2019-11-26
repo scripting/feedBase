@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.6.21";
+var myProductName = "feedBase", myVersion = "0.6.23"; 
 
 /*  The MIT License (MIT) 
 	Copyright (c) 2014-2018 Dave Winer
@@ -540,6 +540,13 @@ function getUserOpmlSubscriptions (username, callback) {
 function getUserOpmlUrl (username) {
 	return (config.opmlS3url + username + "/main.opml");
 	}
+function getUserRecommendations (username, callback) { //3/30/19 by DW
+	var sqltext = "select distinct f1.countSubs, f1.title, f1.feedUrl, f1.htmlUrl from subscriptions s1,  subscriptions s2, subscriptions s3, feeds f1 where s1.feedUrl = s2.feedUrl and s1.username = " + encode (username) + " and s1.username != s2.username and s2.username = s3.username and s3.feedUrl = f1.feedUrl and s3.feedUrl not in (select feedUrl from subscriptions where username = "  + encode (username) + ") order by f1.countSubs DESC, f1.title limit 20;";
+	console.log ("getUserRecommendations: sqltext == " + sqltext);
+	runSqltext (sqltext, function (result) {
+		callback (undefined, result);
+		});
+	}
 function uploadUserOpmlToS3 (username, callback) { //2/28/18 by DW
 	getUserOpmlSubscriptions (username, function (err, opmltext) {
 		if (err) {
@@ -684,6 +691,49 @@ function getFeedInfo (feedUrl, callback) {
 			}
 		});
 	}
+
+function readFeedIncludeEverything (feedUrl, callback) { 
+	feedRead.parseUrl (feedUrl, config.requestTimeoutSecs, function (err, theFeed, httpResponse) {
+		if (err) {
+			callback (undefined, httpResponse);
+			}
+		else {
+			function ifNotNull (val) {
+				if (val === null) {
+					return (undefined);
+					}
+				else {
+					return (val);
+					}
+				}
+			var returnedFeed = {
+				head: theFeed.head,
+				items: []
+				};
+			theFeed.items.forEach (function (item) {
+				var returnedItem = {
+					title: ifNotNull (item.title),
+					link: ifNotNull (item.link),
+					description: ifNotNull (item.description),
+					pubDate: ifNotNull (item.pubDate),
+					guid: ifNotNull (item.guid),
+					author: ifNotNull (item.author),
+					permalink: ifNotNull (item.permalink)
+					};
+				if (item.enclosures.length > 0) {
+					returnedItem.enclosure = item.enclosures [0];
+					}
+				if (item.categories.length > 0) {
+					returnedItem.categories = item.categories;
+					}
+				returnedFeed.items.push (returnedItem);
+				});
+			callback (undefined, returnedFeed);
+			}
+		});
+	}
+
+
 function saveFeedInfoJson (feedUrl, callback) {
 	getFeedInfoFromDatabase (feedUrl, function (err, feedInfo) {
 		var f = config.savedFeedInfoFolder + hashMD5 (feedUrl) + "/" + config.fnameFeedInfo;
@@ -721,8 +771,6 @@ function readOpmlSubscriptionList (f, flExpandIncludes, callback) { //read OPML 
 			}
 		}, flExpandIncludes);
 	}
-
-
 function processListOfLists (screenname, opmltext, callback) { //5/14/18 by DW
 	const flExpandIncludes = false;
 	function saveFile (fname, subs, callback) {
@@ -761,8 +809,6 @@ function processListOfLists (screenname, opmltext, callback) { //5/14/18 by DW
 			}
 		}, flExpandIncludes);
 	}
-
-
 function subscribeToFeed (screenname, fname, feedUrl, callback) {
 	if (true) { //(fname === undefined) {
 		fname = config.defaultListName;
@@ -773,9 +819,7 @@ function subscribeToFeed (screenname, fname, feedUrl, callback) {
 				if (!err) {
 					feedUrl = newUrl;
 					}
-				
 				console.log ("subscribeToFeed: newUrl == " + newUrl);
-				
 				getFeedInfoFromDatabase (feedUrl, function (err, info) {
 					if (err) { //not in database
 						addFeedToDatabase (feedUrl, function (addResult) {
@@ -884,9 +928,7 @@ function logUnsubscribe (screenname, feedUrl) {
 		});
 	}
 function subscribe (screenname, feedUrl, callback) {
-	
 	console.log ("subscribe: screenname == " + screenname + ", feedUrl == " + feedUrl);
-	
 	subscribeToFeed (screenname, undefined, feedUrl, function () {
 		resetFeedSubCount (feedUrl, function () {
 			if (callback !== undefined) {
@@ -1146,6 +1188,11 @@ function handleHttpRequest (theRequest) {
 				httpReturn (err, result);
 				});
 			return (true); //we handled it
+		case "/readfeedincludeeverything": //4/6/19 by DW
+			readFeedIncludeEverything (theRequest.params.feedurl, function (err, result) {
+				httpReturn (err, result);
+				});
+			return (true); //we handled it
 		case "/ping":
 			updateOneFeed (theRequest.params.feedurl, function (result) {
 				returnData (result);
@@ -1269,6 +1316,14 @@ function handleHttpRequest (theRequest) {
 							httpReturn (err, result);
 							});
 						});
+					});
+				});
+			return (true); //we handled it
+		case "/getrecommendations": //3/30/19 by DW
+			callWithScreenname (function (screenname) {
+				console.log ("about to call getUserRecommendations with screenname == " + screenname);
+				getUserRecommendations (screenname, function (err, result) {
+					httpReturn (err, result);
 					});
 				});
 			return (true); //we handled it
