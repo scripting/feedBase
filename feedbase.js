@@ -462,6 +462,12 @@ function getUserSubscriptions (username, callback) {
 		callback (result);
 		});
 	}
+function getUserRecommendations (username, callback) {
+		var sqltext = "select distinct f1.countSubs, f1.title, f1.feedUrl, f1.htmlUrl from subscriptions s1,  subscriptions s2, subscriptions s3, feeds f1 where s1.feedUrl = s2.feedUrl and s1.username = " + encode (username) + " and s1.username != s2.username and s2.username = s3.username and s3.feedUrl = f1.feedUrl and s3.feedUrl not in (select feedUrl from subscriptions where username = "  + encode (username) + ") order by f1.countSubs DESC, f1.title limit 20";
+		runSqltext (sqltext, function (result) {
+			callback (result);
+			});
+		}
 function getOpmlFromArray (title, whenCreated, feedsArray) {
 	var opmltext = "", indentlevel = 0, now = new Date ();
 	function add (s) {
@@ -532,6 +538,22 @@ function getUserOpmlSubscriptions (username, callback) {
 			}
 		getUserSubscriptions (username, function (feedsArray) {
 			var title = "Subscriptions for \"" + username + "\"";
+			var opmltext = getOpmlFromArray (title, whenCreated, feedsArray);
+			callback (undefined, opmltext);
+			});
+		});
+	}
+function getUserOpmlRecommendations (username, callback) {
+	getPrefs (username, function (err, jstruct) {
+		var now = new Date (), whenCreated;
+		try {
+			whenCreated = jstruct.prefs.whenFirstStartup;
+			}
+		catch (err) {
+			whenCreated = now;
+			}
+		getUserRecommendations (username, function (feedsArray) {
+			var title = "Recommendations for \"" + username + "\"";
 			var opmltext = getOpmlFromArray (title, whenCreated, feedsArray);
 			callback (undefined, opmltext);
 			});
@@ -1282,6 +1304,16 @@ function handleHttpRequest (theRequest) {
 			return (true); //we handled it
 		case "/getopmlsubs":
 			getUserOpmlSubscriptions (theRequest.params.username, function (err, opmltext) {
+				if (err) {
+					returnError (err);
+					}
+				else {
+					returnXml (opmltext);
+					}
+				});
+			return (true); //we handled it
+		case "/getopmlrecs":
+			getUserOpmlRecommendations (theRequest.params.username, function (err, opmltext) {
 				if (err) {
 					returnError (err);
 					}
