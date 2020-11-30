@@ -1,3 +1,7 @@
+* ### 0.6.24 -- 11/26/19 by DW
+   * Moved my database from the local computer to a hosted database at DO.
+   * Changed the type of the feeds description column to text, also updated the docs.
+      * ALTER TABLE feeds MODIFY description text;
 * ### 0.6.21 -- 4/6/19 by DW
    * New <i>Add Feed</i> button
       * A new button appears when you're viewing the page listing your feeds. When you click it, you get a dialog that asks for the URL of the feed you want to subscribe to. Enter the URL, we send the feed to the server, and report on whether or not we were able to subscribe, that is if there was an error reading the feed. 

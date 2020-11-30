@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.6.23"; 
+var myProductName = "feedBase", myVersion = "0.6.24"; 
 
 /*  The MIT License (MIT) 
 	Copyright (c) 2014-2018 Dave Winer
@@ -72,6 +72,7 @@ var config = {
 	
 	maxLengthFeedDescription: 512, //4/5/18 by DW
 	maxLengthFeedTitle: 255, //4/5/18 by DW
+	backupFolder: "data/backups/", //11/27/19 by DW
 	
 	duplicateUrlMap: { //4/8/18 by DW
 		"http://www.scripting.com/rss.xml": "http://scripting.com/rss.xml",
@@ -307,6 +308,59 @@ function addSubscriptionToDatabase (username, listname, feedurl, callback) {
 		}
 	
 	
+//nightly backup -- 11/26/19 AM by DW
+	function backupSubscriptions (callback) {
+		var sqltext = "select * from subscriptions;";
+		runSqltext (sqltext, function (result) {
+			var subs = new Array ();
+			for (var i = 0; i < result.length; i++) {
+				subs.push (result [i]);
+				}
+			callback (subs);
+			});
+		}
+	function backupFeeds (callback) {
+		var sqltext = "select * from feeds;";
+		runSqltext (sqltext, function (result) {
+			var feeds = new Array ();
+			for (var i = 0; i < result.length; i++) {
+				feeds.push (result [i]);
+				}
+			callback (feeds);
+			});
+		}
+	function writeBackupFile (theData, fname, callback) {
+		var f = config.backupFolder + fname;
+		utils.sureFilePath (f, function () {
+			var jsontext = utils.jsonStringify (theData);
+			fs.writeFile (f, jsontext, function (err) {
+				if (err) {
+					console.log ("writeBackupFile: f == " + f + ", err.message == " + err.message);
+					}
+				else {
+					console.log ("writeBackupFile: f == " + f);
+					}
+				if (callback !== undefined) {
+					callback ();
+					} 
+				});
+			});
+		}
+	function doBackup () {
+		var whenstart = new Date ();
+		backupFeeds (function (theFeeds) {
+			console.log ("doBackup: theFeeds.length == " + theFeeds.length);
+			writeBackupFile (theFeeds, "feeds.json", function () {
+				theFeeds = []; //reclaim memory used by the array
+				backupSubscriptions (function (theSubs) {
+					console.log ("doBackup: theSubs.length == " + theSubs.length);
+					writeBackupFile (theSubs, "subscriptions.json", function () {
+						console.log ("doBackup: backup took " + utils.secondsSince (whenstart) + " secs.");
+						});
+					});
+				});
+			});
+		}
 
 function addFeedToDatabase (feedUrl, callback) {
 	var whenstart = new Date ();
@@ -691,7 +745,6 @@ function getFeedInfo (feedUrl, callback) {
 			}
 		});
 	}
-
 function readFeedIncludeEverything (feedUrl, callback) { 
 	feedRead.parseUrl (feedUrl, config.requestTimeoutSecs, function (err, theFeed, httpResponse) {
 		if (err) {
@@ -732,8 +785,6 @@ function readFeedIncludeEverything (feedUrl, callback) {
 			}
 		});
 	}
-
-
 function saveFeedInfoJson (feedUrl, callback) {
 	getFeedInfoFromDatabase (feedUrl, function (err, feedInfo) {
 		var f = config.savedFeedInfoFolder + hashMD5 (feedUrl) + "/" + config.fnameFeedInfo;
@@ -1391,6 +1442,7 @@ function everyMinute () {
 		stats.ctFeedUpdatesToday = 0;
 		stats.ctHitsToday = 0;
 		statsChanged ();
+		doBackup (); //11/26/19 by DW
 		}
 	if (!utils.sameDay (theLog.whenLastRollover, now)) { //log rollover
 		theLog.whenLastRollover = now;
@@ -1441,10 +1493,8 @@ function startup () {
 				davetwitter.start (config.twitter, function () {
 					});
 				setInterval (everySecond, 1000); 
-				utils.runAtTopOfMinute (function () {
-					setInterval (everyMinute, 60000); 
-					everyMinute ();
-					});
+				utils.runEveryMinute (everyMinute);
+				doBackup (); //11/26/19 by DW -- just to test
 				});
 			});
 		});
