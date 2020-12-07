@@ -23,6 +23,7 @@ var myProductName = "feedBase", myVersion = "0.7.1";
 	*/
 
 const mysql = require ("mysql");
+const davesql = require ("davesql");
 const utils = require ("daveutils");
 const fs = require ("fs");
 const request = require ("request");
@@ -184,55 +185,12 @@ function formatDateTime (when) {
 		}
 	return (dateFormat (new Date (when), "yyyy-mm-dd HH:MM:ss"));
 	}
-function encode (s) {
-	return (mysql.escape (s));
-	}
-function encodeValues (values) {
-	var part1 = "", part2 = "";
-	for (var x in values) { //generate something like this: (feedurl, title, htmlurl, description, whenupdated)
-		if (part1.length > 0) {
-			part1 += ", ";
-			}
-		part1 += x;
-		}
-	for (var x in values) { //and this: ('http://scripting.com/rss.xml', Scripting News', 'http://scripting.com/', 'Even worse etc', '2018-02-04 12:04:08')
-		if (part2.length > 0) {
-			part2 += ", ";
-			}
-		part2 += encode (values [x]);
-		}
-	return ("(" + part1 + ") values (" + part2 + ");");
-	}
-function runSqltext (s, callback) {
-	theSqlConnectionPool.getConnection (function (err, connection) {
-		if (err) {
-			console.log ("runSqltext: s == " + s);
-			console.log ("runSqltext: err.code == " + err.code + ", err.message == " + err.message);
-			}
-		else {
-			connection.query (s, function (err, result) {
-				connection.release ();
-				if (err) {
-					console.log ("runSqltext: err.code == " + err.code + ", err.message == " + err.message);
-					if (callback !== undefined) {
-						callback (undefined);
-						}
-					}
-				else {
-					if (callback !== undefined) {
-						callback (result);
-						}
-					}
-				});
-			}
-		});
-	}
 function resetFeedSubCount (feedUrl, callback) { //set the ctSubs column for the indicated feed in the feeds table
-	var sqltext = "SELECT count(*) AS c FROM subscriptions WHERE feedUrl=" + encode (feedUrl);
-	runSqltext (sqltext, function (resultCount) {
+	var sqltext = "SELECT count(*) AS c FROM subscriptions WHERE feedUrl=" + davesql.encode (feedUrl);
+	davesql.runSqltext (sqltext, function (err, resultCount) {
 		var firstLine = resultCount [0];
-		sqltext = "UPDATE feeds SET countSubs = " + firstLine.c + " WHERE feedUrl = " + encode (feedUrl);
-		runSqltext (sqltext, function (resultUpdate) {
+		sqltext = "UPDATE feeds SET countSubs = " + firstLine.c + " WHERE feedUrl = " + davesql.encode (feedUrl);
+		davesql.runSqltext (sqltext, function (err, resultUpdate) {
 			if (callback !== undefined) {
 				callback (resultUpdate);
 				}
@@ -241,9 +199,9 @@ function resetFeedSubCount (feedUrl, callback) { //set the ctSubs column for the
 	}
 function addSubscriptionToDatabase (username, listname, feedurl, callback) {
 	var now = formatDateTime (new Date ());
-	var sqltext = "REPLACE INTO subscriptions (username, feedUrl, whenUpdated) VALUES (" + encode (username) + ", " + encode (feedurl) + ", " + encode (now) + ");";
+	var sqltext = "REPLACE INTO subscriptions (username, feedUrl, whenUpdated) VALUES (" + davesql.encode (username) + ", " + davesql.encode (feedurl) + ", " + davesql.encode (now) + ");";
 	hotlistChanged ();
-	runSqltext (sqltext, function (result) {
+	davesql.runSqltext (sqltext, function (err, result) {
 		resetFeedSubCount (feedurl, function (resetResult) {
 			if (callback !== undefined) {
 				callback (result);
@@ -310,7 +268,7 @@ function addSubscriptionToDatabase (username, listname, feedurl, callback) {
 //nightly backup -- 11/26/19 AM by DW
 	function backupSubscriptions (callback) {
 		var sqltext = "select * from subscriptions;";
-		runSqltext (sqltext, function (result) {
+		davesql.runSqltext (sqltext, function (err, result) {
 			var subs = new Array ();
 			for (var i = 0; i < result.length; i++) {
 				subs.push (result [i]);
@@ -320,7 +278,7 @@ function addSubscriptionToDatabase (username, listname, feedurl, callback) {
 		}
 	function backupFeeds (callback) {
 		var sqltext = "select * from feeds;";
-		runSqltext (sqltext, function (result) {
+		davesql.runSqltext (sqltext, function (err, result) {
 			var feeds = new Array ();
 			for (var i = 0; i < result.length; i++) {
 				feeds.push (result [i]);
@@ -387,9 +345,9 @@ function addFeedToDatabase (feedUrl, callback) {
 				values.ctChecks++;
 				
 				function updateRecord (values, callback) {
-					var sqltext = "replace into feeds " + encodeValues (values);
+					var sqltext = "replace into feeds " + davesql.encodeValues (values);
 					stats.lastFeedUpdate = values;
-					runSqltext (sqltext, function (result) {
+					davesql.runSqltext (sqltext, function (err, result) {
 						resetFeedSubCount (feedUrl, function () {
 							if (callback !== undefined) {
 								callback (values);
@@ -434,7 +392,7 @@ function adjustHotlistCounts (theList) {
 	}
 function getHotlist (callback) {
 	const sqltext = "SELECT subscriptions.feedUrl, feeds.title, feeds.htmlUrl, COUNT(subscriptions.feedUrl) AS countSubs FROM subscriptions, feeds WHERE subscriptions.feedUrl = feeds.feedUrl and feeds.title is not null GROUP BY feedUrl ORDER BY countSubs DESC LIMIT " + config.ctHotlistItems + ";";
-	runSqltext (sqltext, function (result) {
+	davesql.runSqltext (sqltext, function (err, result) {
 		adjustHotlistCounts (result); //4/8/18 by DW
 		callback (result);
 		});
@@ -480,7 +438,7 @@ function updateLog (whenClientLastUpdate, callback) { //3/28/18 by DW
 	}
 function getKnownFeeds (callback) {
 	var sqltext = "select feedUrl from feeds where code = 200;";
-	runSqltext (sqltext, function (result) {
+	davesql.runSqltext (sqltext, function (err, result) {
 		var feeds = new Array ();
 		for (var i = 0; i < result.length; i++) {
 			feeds.push (result [i].feedUrl);
@@ -504,14 +462,14 @@ function getInfoAboutKnownFeeds (callback) {
 		});
 	}
 function deleteSubscriptions (username, callback) {
-	var sqltext = "delete from subscriptions where username = " + encode (username) + ";";
-	runSqltext (sqltext, function (result) {
+	var sqltext = "delete from subscriptions where username = " + davesql.encode (username) + ";";
+	davesql.runSqltext (sqltext, function (err, result) {
 		callback (result);
 		});
 	}
 function getUserSubscriptions (username, callback) {
-	var sqltext = "SELECT s.feedUrl, f.title, f.htmlUrl, f.countSubs, s.categories FROM subscriptions AS s, feeds AS f WHERE s.feedUrl = f.feedUrl AND f.title is not null AND s.username = " + encode (username) + " ORDER BY s.whenUpdated DESC;";
-	runSqltext (sqltext, function (result) {
+	var sqltext = "SELECT s.feedUrl, f.title, f.htmlUrl, f.countSubs, f.ctChecks, f.whenUpdated, f.code, f.ctSecs, f.ctErrors, f.ctConsecutiveErrors, f.whenLastError, s.categories FROM subscriptions AS s, feeds AS f WHERE s.feedUrl = f.feedUrl AND f.title is not null AND s.username = " + davesql.encode (username) + " ORDER BY s.whenUpdated DESC;";
+	davesql.runSqltext (sqltext, function (err, result) {
 		result.forEach (function (sub) {
 			if (sub.categories == null) {
 				delete sub.categories;
@@ -662,9 +620,9 @@ function getUserOpmlUrl (username, catname) {
 	return (config.opmlS3url + username + "/" + fname);
 	}
 function getUserRecommendations (username, callback) { //3/30/19 by DW
-	var sqltext = "select distinct f1.countSubs, f1.title, f1.feedUrl, f1.htmlUrl from subscriptions s1,  subscriptions s2, subscriptions s3, feeds f1 where s1.feedUrl = s2.feedUrl and s1.username = " + encode (username) + " and s1.username != s2.username and s2.username = s3.username and s3.feedUrl = f1.feedUrl and s3.feedUrl not in (select feedUrl from subscriptions where username = "  + encode (username) + ") order by f1.countSubs DESC, f1.title limit 20;";
+	var sqltext = "select distinct f1.countSubs, f1.title, f1.feedUrl, f1.htmlUrl from subscriptions s1,  subscriptions s2, subscriptions s3, feeds f1 where s1.feedUrl = s2.feedUrl and s1.username = " + davesql.encode (username) + " and s1.username != s2.username and s2.username = s3.username and s3.feedUrl = f1.feedUrl and s3.feedUrl not in (select feedUrl from subscriptions where username = "  + davesql.encode (username) + ") order by f1.countSubs DESC, f1.title limit 20;";
 	console.log ("getUserRecommendations: sqltext == " + sqltext);
-	runSqltext (sqltext, function (result) {
+	davesql.runSqltext (sqltext, function (err, result) {
 		callback (undefined, result);
 		});
 	}
@@ -744,8 +702,8 @@ function uploadHotlistToS3 (callback) { //3/22/18 by DW
 		});
 	}
 function getFeedInfoFromDatabase (feedUrl, callback) { //as opposed to getting it from the feed itself
-	var sqltext = "SELECT * FROM feeds WHERE feedUrl=" + encode (feedUrl) + ";";
-	runSqltext (sqltext, function (result) {
+	var sqltext = "SELECT * FROM feeds WHERE feedUrl=" + davesql.encode (feedUrl) + ";";
+	davesql.runSqltext (sqltext, function (err, result) {
 		if (result.length == 0) {
 			callback ({message: "Can't get the info for the feed \"" + feedUrl + "\" because it is not in the database."});
 			}
@@ -755,8 +713,8 @@ function getFeedInfoFromDatabase (feedUrl, callback) { //as opposed to getting i
 		});
 	}
 function getUsersWhoFollowFeed (feedUrl, callback) {
-	var sqltext = "select username from subscriptions where feedUrl=" + encode (feedUrl) + ";";
-	runSqltext (sqltext, function (result) {
+	var sqltext = "select username from subscriptions where feedUrl=" + davesql.encode (feedUrl) + ";";
+	davesql.runSqltext (sqltext, function (err, result) {
 		var userarray = new Array ();
 		if (result !== undefined) { //4/17/18 by DW
 			for (var i = 0; i < result.length; i++) {
@@ -777,7 +735,7 @@ function updateOneFeed (feedUrl, callback) {
 	}
 function updateLeastRecentlyUpdatedFeed (callback) {
 	var sqltext = "SELECT * FROM feeds ORDER BY whenUpdated ASC LIMIT 1;";
-	runSqltext (sqltext, function (result) {
+	davesql.runSqltext (sqltext, function (err, result) {
 		if (result.length > 0) { //3/7/18 by DW
 			var theFeed = result [0];
 			var secsSinceUpdate = utils.secondsSince (theFeed.whenUpdated);
@@ -1094,10 +1052,10 @@ function subscribe (screenname, feedUrl, callback) {
 		});
 	}
 function unsubscribe (screenname, feedUrl, callback) {
-	var sqltext = "delete from subscriptions where username = " + encode (screenname) + " and feedUrl = " + encode (feedUrl) + ";";
+	var sqltext = "delete from subscriptions where username = " + davesql.encode (screenname) + " and feedUrl = " + davesql.encode (feedUrl) + ";";
 	hotlistChanged ();
 	logUnsubscribe (screenname, feedUrl);
-	runSqltext (sqltext, function (result) {
+	davesql.runSqltext (sqltext, function (err, result) {
 		resetFeedSubCount (feedUrl, function () {
 			if (callback !== undefined) {
 				callback (result);
@@ -1106,8 +1064,8 @@ function unsubscribe (screenname, feedUrl, callback) {
 		});
 	}
 function getSubscription (screenname, feedUrl, callback) { //12/4/20 PM by DW -- xxx
-	const sqltext = "select * from subscriptions where username = " + encode (screenname) + " and feedurl = " + encode (feedUrl) + ";";
-	runSqltext (sqltext, function (result) {
+	const sqltext = "select * from subscriptions where username = " + davesql.encode (screenname) + " and feedurl = " + davesql.encode (feedUrl) + ";";
+	davesql.runSqltext (sqltext, function (err, result) {
 		var theSubscription;
 		if (result.length == 0) {
 			theSubscription = new Object (); //empty
@@ -1125,16 +1083,16 @@ function getSubscription (screenname, feedUrl, callback) { //12/4/20 PM by DW --
 		});
 	}
 function setCategoriesForSubscription (screenname, feedUrl, catstring, callback) { //12/3/20 PM by DW -- xxx
-	const sqltext = "select * from subscriptions where username = " + encode (screenname) + " and feedurl = " + encode (feedUrl) + ";";
-	runSqltext (sqltext, function (result) {
+	const sqltext = "select * from subscriptions where username = " + davesql.encode (screenname) + " and feedurl = " + davesql.encode (feedUrl) + ";";
+	davesql.runSqltext (sqltext, function (err, result) {
 		var theSubscription = result [0];
 		if (theSubscription === undefined) {
 			callback ({message: "Can't set the categories because the user isn't subscribed to the feed."});
 			}
 		else {
 			theSubscription.categories = catstring;
-			const sqltext = "replace into subscriptions " + encodeValues (theSubscription);
-			runSqltext (sqltext, function (result) {
+			const sqltext = "replace into subscriptions " + davesql.encodeValues (theSubscription);
+			davesql.runSqltext (sqltext, function (err, result) {
 				callback (undefined, theSubscription);
 				});
 			}
@@ -1197,9 +1155,9 @@ function userUploadedOpml (screenname, opmltext, callback) { //called when the u
 function getDynamicStats (callback) {
 	var sqltext1 = "select count(*) from subscriptions;";
 	var sqltext2 = "select count(*) from feeds;";
-	runSqltext (sqltext1, function (result1) {
+	davesql.runSqltext (sqltext1, function (err, result1) {
 		stats.ctSubscriptions = result1 [0] ["count(*)"];
-		runSqltext (sqltext2, function (result2) {
+		davesql.runSqltext (sqltext2, function (err, result2) {
 			stats.ctFeeds = result2 [0] ["count(*)"];
 			if (callback !== undefined) {
 				callback (stats);
@@ -1650,14 +1608,15 @@ function startup () {
 		readCurrentLogFile (function () {
 			readConfig (function () {
 				console.log ("config == " + utils.jsonStringify (config));
-				theSqlConnectionPool = mysql.createPool (config.database);
-				config.twitter.httpRequestCallback = handleHttpRequest;
-				config.twitter.flPostEnabled = true; //3/1/18 by DW
-				davetwitter.start (config.twitter, function () {
+				davesql.start (config.database, function () {
+					config.twitter.httpRequestCallback = handleHttpRequest;
+					config.twitter.flPostEnabled = true; //3/1/18 by DW
+					davetwitter.start (config.twitter, function () {
+						});
+					setInterval (everySecond, 1000); 
+					utils.runEveryMinute (everyMinute);
+					doBackup (); //11/26/19 by DW
 					});
-				setInterval (everySecond, 1000); 
-				utils.runEveryMinute (everyMinute);
-				doBackup (); //11/26/19 by DW -- just to test
 				});
 			});
 		});

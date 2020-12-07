@@ -10,48 +10,6 @@ var config = {
 	};
 const fnameConfig = "config.json";
 
-function encode (s) {
-	return (mysql.escape (s));
-	}
-function encodeValues (values) {
-	var part1 = "", part2 = "";
-	for (var x in values) { //generate something like this: (feedurl, title, htmlurl, description, whenupdated)
-		if (part1.length > 0) {
-			part1 += ", ";
-			}
-		part1 += x;
-		}
-	for (var x in values) { //and this: ('http://scripting.com/rss.xml', Scripting News', 'http://scripting.com/', 'Even worse etc', '2018-02-04 12:04:08')
-		if (part2.length > 0) {
-			part2 += ", ";
-			}
-		part2 += encode (values [x]);
-		}
-	return ("(" + part1 + ") values (" + part2 + ");");
-	}
-function runSqltext (s, callback) {
-	theSqlConnectionPool.getConnection (function (err, connection) {
-		if (err) {
-			console.log ("runSqltext: err.code == " + err.code + ", err.message == " + err.message);
-			}
-		else {
-			connection.query (s, function (err, result) {
-				connection.release ();
-				if (err) {
-					console.log ("runSqltext: err.code == " + err.code + ", err.message == " + err.message);
-					if (callback !== undefined) {
-						callback (undefined);
-						}
-					}
-				else {
-					if (callback !== undefined) {
-						callback (result);
-						}
-					}
-				});
-			}
-		});
-	}
 function backupSubscriptions (callback) {
 	var sqltext = "select * from subscriptions;";
 	runSqltext (sqltext, function (result) {
