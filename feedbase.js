@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.6.24"; 
+var myProductName = "feedBase", myVersion = "0.7.1"; 
 
 /*  The MIT License (MIT) 
 	Copyright (c) 2014-2018 Dave Winer
@@ -44,7 +44,6 @@ var config = {
 	fnamePrefs: "prefs.json", //each user's prefs file
 	fnameOpml: "subs.opml",
 	fnameLastUploadedOpml: "lastUploaded.opml", 
-	defaultListName: "main.opml",
 	fnameS3backup: "s3Backup.opml",
 	fnameStats: "data/stats.json", //stats for the app
 	fnameLog: "data/log.json", 
@@ -61,7 +60,7 @@ var config = {
 		urlTwitterServer: "http://feedbase.io/"
 		},
 	urlFavicon: "http://scripting.com/favicon.ico",
-	urlServerHomePageSource: "http://scripting.com/code/syo/index.html",
+	urlServerHomePageSource: "http://scripting.com/code/feedbase/index.html",
 	ctSecsHomepageCache: 1, //set it higher for stable production server
 	
 	whenHotlistCreated: new Date ("Fri, 09 Mar 2018 17:46:45 GMT"),
@@ -242,7 +241,7 @@ function resetFeedSubCount (feedUrl, callback) { //set the ctSubs column for the
 	}
 function addSubscriptionToDatabase (username, listname, feedurl, callback) {
 	var now = formatDateTime (new Date ());
-	var sqltext = "REPLACE INTO subscriptions (username, listname, feedUrl, whenUpdated) VALUES (" + encode (username) + ", " + encode (listname) + ", " + encode (feedurl) + ", " + encode (now) + ");";
+	var sqltext = "REPLACE INTO subscriptions (username, feedUrl, whenUpdated) VALUES (" + encode (username) + ", " + encode (feedurl) + ", " + encode (now) + ");";
 	hotlistChanged ();
 	runSqltext (sqltext, function (result) {
 		resetFeedSubCount (feedurl, function (resetResult) {
@@ -511,12 +510,17 @@ function deleteSubscriptions (username, callback) {
 		});
 	}
 function getUserSubscriptions (username, callback) {
-	var sqltext = "SELECT s.feedUrl, s.listname, f.title, f.htmlUrl, f.countSubs FROM subscriptions AS s, feeds AS f WHERE s.feedUrl = f.feedUrl AND f.title is not null AND s.username = " + encode (username) + " ORDER BY s.whenUpdated DESC;";
+	var sqltext = "SELECT s.feedUrl, f.title, f.htmlUrl, f.countSubs, s.categories FROM subscriptions AS s, feeds AS f WHERE s.feedUrl = f.feedUrl AND f.title is not null AND s.username = " + encode (username) + " ORDER BY s.whenUpdated DESC;";
 	runSqltext (sqltext, function (result) {
+		result.forEach (function (sub) {
+			if (sub.categories == null) {
+				delete sub.categories;
+				}
+			});
 		callback (result);
 		});
 	}
-function getOpmlFromArray (title, whenCreated, feedsArray) {
+function getOpmlFromArray (metadata, feedsArray) {
 	var opmltext = "", indentlevel = 0, now = new Date ();
 	function add (s) {
 		opmltext += utils.filledString ("\t", indentlevel) + s + "\n";
@@ -532,10 +536,19 @@ function getOpmlFromArray (title, whenCreated, feedsArray) {
 	add ("<opml version=\"2.0\">"); indentlevel++;
 	//add head
 		add ("<head>"); indentlevel++;
-		add ("<title>" + encode (title) + "</title>");
-		if (whenCreated !== undefined) {
-			add ("<dateCreated>" + new Date (whenCreated).toUTCString () + "</dateCreated>");
+		
+		if (metadata.dateCreated !== undefined) {
+			metadata.dateCreated = new Date (metadata.dateCreated).toUTCString ();
 			}
+		for (var x in metadata) {
+			if (x !== "name") {
+				var s = metadata [x];
+				if (s.length > 0) {
+					add ("<" + x + ">" + encode (s) + "</" + x + ">");
+					}
+				}
+			}
+		
 		add ("<dateModified>" + now.toUTCString () + "</dateModified>");
 		add ("</head>"); indentlevel--;
 	add ("<body>"); indentlevel++;
@@ -575,7 +588,20 @@ function getOpmlFromArray (title, whenCreated, feedsArray) {
 	add ("</opml>"); indentlevel--;
 	return (opmltext);
 	}
-function getUserOpmlSubscriptions (username, callback) {
+function getUserOpmlSubscriptions (username, catname, callback) {
+	function findCat (theCats, catname) {
+		var theCat = undefined;
+		if (catname !== undefined) {
+			console.log ("findCat: theCats == " + utils.jsonStringify (theCats) + ", catname == " + catname);
+			theCats.forEach (function (item) {
+				if (item.name.toLowerCase () == catname.toLowerCase ()) {
+					theCat = item;
+					}
+				});
+			}
+		return (theCat);
+		}
+	console.log ("getUserOpmlSubscriptions: username == " + username + ", catname == " + catname);
 	getPrefs (username, function (err, jstruct) {
 		var now = new Date (), whenCreated;
 		try {
@@ -585,14 +611,55 @@ function getUserOpmlSubscriptions (username, callback) {
 			whenCreated = now;
 			}
 		getUserSubscriptions (username, function (feedsArray) {
-			var title = "Subscriptions for \"" + username + "\"";
-			var opmltext = getOpmlFromArray (title, whenCreated, feedsArray);
+			var thisCatsFeeds;
+			if (catname === undefined) {
+				thisCatsFeeds = feedsArray;
+				}
+			else {
+				thisCatsFeeds = new Array ();
+				feedsArray.forEach (function (theFeed) {
+					if (theFeed.categories !== undefined) {
+						var splits = theFeed.categories.split (",");
+						splits.forEach (function (s) {
+							if (s.toLowerCase () == catname.toLowerCase ()) {
+								thisCatsFeeds.push (theFeed);
+								}
+							});
+						}
+					});
+				}
+			var title;
+			if (catname === undefined) {
+				title = "Subscriptions for " + username;
+				}
+			else {
+				title = username + ": " + catname + " feeds.";
+				}
+			var description = "";
+			var metadata = {
+				title,
+				description,
+				dateCreated: whenCreated
+				};
+			if (jstruct.prefs.categories !== undefined) { //12/6/20 by DW
+				var thisCategory = findCat (jstruct.prefs.categories, catname);
+				if (thisCategory !== undefined) {
+					for (var x in thisCategory) {
+						metadata [x] = thisCategory [x];
+						}
+					}
+				}
+			var opmltext = getOpmlFromArray (metadata, thisCatsFeeds);
 			callback (undefined, opmltext);
 			});
 		});
 	}
-function getUserOpmlUrl (username) {
-	return (config.opmlS3url + username + "/main.opml");
+function getUserOpmlUrl (username, catname) {
+	var fname = "main.opml";
+	if (catname !== undefined) {
+		fname = utils.innerCaseName (catname) + ".opml";
+		}
+	return (config.opmlS3url + username + "/" + fname);
 	}
 function getUserRecommendations (username, callback) { //3/30/19 by DW
 	var sqltext = "select distinct f1.countSubs, f1.title, f1.feedUrl, f1.htmlUrl from subscriptions s1,  subscriptions s2, subscriptions s3, feeds f1 where s1.feedUrl = s2.feedUrl and s1.username = " + encode (username) + " and s1.username != s2.username and s2.username = s3.username and s3.feedUrl = f1.feedUrl and s3.feedUrl not in (select feedUrl from subscriptions where username = "  + encode (username) + ") order by f1.countSubs DESC, f1.title limit 20;";
@@ -602,36 +669,74 @@ function getUserRecommendations (username, callback) { //3/30/19 by DW
 		});
 	}
 function uploadUserOpmlToS3 (username, callback) { //2/28/18 by DW
-	getUserOpmlSubscriptions (username, function (err, opmltext) {
-		if (err) {
-			if (callback !== undefined) {
-				callback (err);
+	getPrefs (username, function (err, jstruct) {
+		var theCategories = jstruct.prefs.categories;
+		console.log ("uploadUserOpmlToS3: theCategories == " + utils.jsonStringify (theCategories));
+		function uploadOne (theCategory, callback) {
+			var catname, fname;
+			if (theCategory === undefined) {
+				catname = undefined;
+				fname = "main.opml";
 				}
-			}
-		else {
-			var path = config.opmlS3path + username + "/main.opml";
-			s3.newObject (path, opmltext, "text/xml", "public-read", function (err, data) {
-				console.log ("uploadUserOpmlToS3: url == http:/" + path);
-				
-				var f = config.usersFolder + username + "/" + config.fnameS3backup; //3/13/18 by DW
-				utils.sureFilePath (f, function () {
-					fs.writeFile (f, opmltext, function (err) {
+			else {
+				catname = theCategory.name;
+				fname = utils.innerCaseName (catname) + ".opml";
+				}
+			getUserOpmlSubscriptions (username, catname, function (err, opmltext) {
+				if (err) {
+					callback (err);
+					}
+				else {
+					var path = config.opmlS3path + username + "/" + fname;
+					s3.newObject (path, opmltext, "text/xml", "public-read", function (err, data) {
+						console.log ("uploadUserOpmlToS3: url == http:/" + path);
+						var f = config.usersFolder + username + "/" + fname; //3/13/18 by DW
+						utils.sureFilePath (f, function () {
+							fs.writeFile (f, opmltext, function (err) {
+								});
+							});
+						callback (undefined, getUserOpmlUrl (username, catname));
 						});
-					});
-				
-				if (callback !== undefined) {
-					var jstruct = {
-						opmlUrl: getUserOpmlUrl (username)
-						};
-					callback (undefined, jstruct);
 					}
 				});
 			}
+		uploadOne (undefined, function (err, opmlUrl) { //upload the main file
+			if (err) {
+				callback (err);
+				}
+			else {
+				if (theCategories === undefined) { //this user has no categories
+					callback (undefined, {opmlUrl});
+					}
+				else {
+					var ix = 0, arrayOfUrls = [opmlUrl];
+					function uploadNext (ix) {
+						if (ix < theCategories.length) {
+							uploadOne (theCategories [ix], function (err, opmlUrl) { //upload the opml file for the category
+								if (!err) {
+									arrayOfUrls.push (opmlUrl);
+									}
+								uploadNext (ix + 1);
+								});
+							}
+						else {
+							callback (undefined, arrayOfUrls);
+							}
+						}
+					uploadNext (0);
+					}
+				}
+			});
 		});
 	}
 function uploadHotlistToS3 (callback) { //3/22/18 by DW
 	getHotlist (function (theHotlist) {
-		var opmltext = getOpmlFromArray (config.hotlistTitle, config.whenHotlistCreated, theHotlist);
+		var metadata = {
+			title: config.hotlistTitle,
+			description: undefined,
+			dateCreated: config.whenHotlistCreated
+			};
+		var opmltext = getOpmlFromArray (metadata, theHotlist);
 		var path = config.opmlS3path + config.s3HotlistPath;
 		s3.newObject (path, opmltext, "text/xml", "public-read", function (err, data) {
 			callback ();
@@ -825,7 +930,10 @@ function readOpmlSubscriptionList (f, flExpandIncludes, callback) { //read OPML 
 function processListOfLists (screenname, opmltext, callback) { //5/14/18 by DW
 	const flExpandIncludes = false;
 	function saveFile (fname, subs, callback) {
-		var opmltext = getOpmlFromArray (fname, undefined, subs);
+		var metadata = {
+			title: fname
+			};
+		var opmltext = getOpmlFromArray (metadata, subs);
 		var path = config.opmlS3path + screenname + "/" + fname;
 		s3.newObject (path, opmltext, "text/xml", "public-read", function (err, data) {
 			console.log ("processListOfLists: url == http:/" + path);
@@ -861,9 +969,6 @@ function processListOfLists (screenname, opmltext, callback) { //5/14/18 by DW
 		}, flExpandIncludes);
 	}
 function subscribeToFeed (screenname, fname, feedUrl, callback) {
-	if (true) { //(fname === undefined) {
-		fname = config.defaultListName;
-		}
 	getFeedInfoFromDatabase (feedUrl, function (err, info) {
 		if (err) {  //not in database
 			derefUrl (feedUrl, function (err, newUrl) { 
@@ -875,13 +980,13 @@ function subscribeToFeed (screenname, fname, feedUrl, callback) {
 					if (err) { //not in database
 						addFeedToDatabase (feedUrl, function (addResult) {
 							addToLog (screenname, "new feed", feedUrl);
-							addSubscriptionToDatabase (screenname, fname, feedUrl, function (result) {
+							addSubscriptionToDatabase (screenname, undefined, feedUrl, function (result) {
 								callback (result);
 								});
 							});
 						}
 					else {
-						addSubscriptionToDatabase (screenname, fname, feedUrl, function (result) {
+						addSubscriptionToDatabase (screenname, undefined, feedUrl, function (result) {
 							callback (result);
 							});
 						}
@@ -889,7 +994,7 @@ function subscribeToFeed (screenname, fname, feedUrl, callback) {
 				});
 			}
 		else {
-			addSubscriptionToDatabase (screenname, fname, feedUrl, function (result) {
+			addSubscriptionToDatabase (screenname, undefined, feedUrl, function (result) {
 				callback (result);
 				});
 			}
@@ -1000,6 +1105,41 @@ function unsubscribe (screenname, feedUrl, callback) {
 			});
 		});
 	}
+function getSubscription (screenname, feedUrl, callback) { //12/4/20 PM by DW -- xxx
+	const sqltext = "select * from subscriptions where username = " + encode (screenname) + " and feedurl = " + encode (feedUrl) + ";";
+	runSqltext (sqltext, function (result) {
+		var theSubscription;
+		if (result.length == 0) {
+			theSubscription = new Object (); //empty
+			}
+		else {
+			theSubscription = result [0];
+			if (theSubscription.categories == null) {
+				delete theSubscription.categories;
+				}
+			if (theSubscription.listname !== undefined) { //evolving away from this, don't show through the api
+				delete theSubscription.listname;
+				}
+			}
+		callback (undefined, theSubscription);
+		});
+	}
+function setCategoriesForSubscription (screenname, feedUrl, catstring, callback) { //12/3/20 PM by DW -- xxx
+	const sqltext = "select * from subscriptions where username = " + encode (screenname) + " and feedurl = " + encode (feedUrl) + ";";
+	runSqltext (sqltext, function (result) {
+		var theSubscription = result [0];
+		if (theSubscription === undefined) {
+			callback ({message: "Can't set the categories because the user isn't subscribed to the feed."});
+			}
+		else {
+			theSubscription.categories = catstring;
+			const sqltext = "replace into subscriptions " + encodeValues (theSubscription);
+			runSqltext (sqltext, function (result) {
+				callback (undefined, theSubscription);
+				});
+			}
+		});
+	}
 function isSubscribed (screenname, feedUrl, callback) {
 	getUserSubscriptions (screenname, function (subs) {
 		for (var i = 0; i < subs.length; i++) {
@@ -1101,6 +1241,7 @@ function savePrefs (screenname, jsontext, callback) {
 		});
 	}
 function handleHttpRequest (theRequest) {
+	const params = theRequest.params;
 	var token = (theRequest.params.oauth_token !== undefined) ? theRequest.params.oauth_token : undefined;
 	var secret = (theRequest.params.oauth_token_secret !== undefined) ? theRequest.params.oauth_token_secret : undefined;
 	
@@ -1285,6 +1426,26 @@ function handleHttpRequest (theRequest) {
 					});
 				});
 			return (true); //we handled it
+		case "/setcategories": //12/3/20 by DW
+			callWithScreenname (function (screenname) {
+				setCategoriesForSubscription (screenname, params.feedurl, params.catstring, function (err, theSubscription) {
+					if (!err) {
+						updateUserOpml (screenname);
+						}
+					httpReturn (err, theSubscription);
+					});
+				});
+			return (true); //we handled it
+		case "/updateopml": //12/6/20 by DW
+			callWithScreenname (function (screenname) {
+				uploadUserOpmlToS3 (screenname, httpReturn);
+				});
+			return (true); //we handled it
+		case "/getsubscription": //12/4/20 by DW
+			callWithScreenname (function (screenname) {
+				getSubscription (screenname, params.feedurl, httpReturn);
+				});
+			return (true); //we handled it
 		case "/getprefs":
 			callWithScreenname (function (screenname) {
 				getPrefs (screenname, function (err, result) {
@@ -1301,7 +1462,7 @@ function handleHttpRequest (theRequest) {
 			return (true); //we handled it
 		case "/getopml":
 			callWithScreenname (function (screenname) {
-				getUserOpmlSubscriptions (screenname, function (err, opmltext) {
+				getUserOpmlSubscriptions (screenname, undefined, function (err, opmltext) {
 					if (err) {
 						returnError (err);
 						}
@@ -1332,7 +1493,7 @@ function handleHttpRequest (theRequest) {
 				});
 			return (true); //we handled it
 		case "/getopmlsubs":
-			getUserOpmlSubscriptions (theRequest.params.username, function (err, opmltext) {
+			getUserOpmlSubscriptions (theRequest.params.username, undefined, function (err, opmltext) {
 				if (err) {
 					returnError (err);
 					}
@@ -1431,11 +1592,13 @@ function writeStats (callback) {
 	}
 function everyMinute () {
 	var now = new Date (), timestring = now.toLocaleTimeString ();
-	if (flOneConsoleMsgInLastMinute) {
-		console.log ("");
-		flOneConsoleMsgInLastMinute = false;
+	if (now.getMinutes () == 0) { //12/3/20 by DW
+		if (flOneConsoleMsgInLastMinute) {
+			console.log ("");
+			flOneConsoleMsgInLastMinute = false;
+			}
+		console.log (myProductName + " v" + myVersion + ": " + timestring + ".\n");
 		}
-	console.log (myProductName + " v" + myVersion + ": " + timestring + ".\n");
 	readConfig ();
 	if (!utils.sameDay (stats.whenLastDayRollover, now)) { //date rollover
 		stats.whenLastDayRollover = now;

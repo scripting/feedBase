@@ -1,8 +1,8 @@
 {
 	"name": "feedbase",
 	"description": "Let's get some feeds into a database.",
-	"author": "Dave Winer <dave@smallpicture.com>",
-	"version": "0.6.24",
+	"author": "Dave Winer <dave@scripting.com>",
+	"version": "0.7.1",
 	"dependencies" : {
 		"mysql": "*",
 		"request": "*",
