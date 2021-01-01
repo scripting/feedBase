@@ -175,6 +175,7 @@ function everySecond () {
 		}
 	writeLogIfChanged (); //3/26/18 by DW
 	}
+readDebugFeedChecks ();
 readConfig (function () {
 	console.log ("config == " + utils.jsonStringify (config));
 	theSqlConnectionPool = mysql.createPool (config.database);

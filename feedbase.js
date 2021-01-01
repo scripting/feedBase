@@ -1,4 +1,4 @@
-var myProductName = "feedBase", myVersion = "0.7.1"; 
+var myProductName = "feedBase", myVersion = "0.7.2"; 
 
 /*  The MIT License (MIT) 
 	Copyright (c) 2014-2018 Dave Winer
@@ -22,7 +22,6 @@ var myProductName = "feedBase", myVersion = "0.7.1";
 	SOFTWARE.
 	*/
 
-const mysql = require ("mysql");
 const davesql = require ("davesql");
 const utils = require ("daveutils");
 const fs = require ("fs");
@@ -37,7 +36,7 @@ const crypto = require ("crypto");
 const feedRead = require ("davefeedread"); //3/31/18 by DW
 
 var config = {
-	flFeedUpdates: true, //if false we don't check feeds for changed info, useful for test servers -- 4/7/18 by DW
+	flFeedUpdates: false, //if false we don't check feeds for changed info, useful for test servers -- 4/7/18 by DW
 	ctSecsBetwFeedUpdates: 15,
 	minSecsBetwSingleFeedUpdate: 60 * 15, //at least 15 minutes betw checks for each feed
 	outlineImportFolder: "outlines/",
@@ -131,6 +130,26 @@ var flOneConsoleMsgInLastMinute = false;
 var whenLastHomepageRead = new Date (0), homepageCache = undefined;
 var flHotlistChanged = false;
 
+var debugFeedChecks = new Object ();
+const fnameDebugFeedChecks = "data/debugFeedChecks.json";
+
+function readDebugFeedChecks (callback) {
+	fs.readFile (fnameDebugFeedChecks, function (err, jsontext) {
+		
+		console.log ("readDebugFeedChecks: jsontext == " + jsontext);
+		
+		if (!err) {
+			debugFeedChecks = JSON.parse (jsontext);
+			}
+		if (callback !== undefined) {
+			callback ();
+			}
+		});
+	}
+function saveDebugFeedChecks () {
+	fs.writeFile (fnameDebugFeedChecks, utils.jsonStringify (debugFeedChecks), function (err) {
+		});
+	}
 
 function hashMD5 (s) {
 	return (crypto.createHash ("md5").update (s).digest ("hex"));
@@ -321,59 +340,74 @@ function addSubscriptionToDatabase (username, listname, feedurl, callback) {
 
 function addFeedToDatabase (feedUrl, callback) {
 	var whenstart = new Date ();
-	getFeedInfoFromDatabase (feedUrl, function (err, values) {
-		var flFeedWasInDatabase = false;
-		if (err) {
-			values = {
-				feedUrl: feedUrl,
-				ctChecks: 0,
-				ctErrors: 0,
-				ctConsecutiveErrors: 0
-				};
-			}
-		else {
-			flFeedWasInDatabase = true;
+	var values = {
+		feedUrl: feedUrl,
+		ctChecks: 0,
+		ctErrors: 0,
+		ctConsecutiveErrors: 0
+		};
+	getFeedInfoFromDatabase (feedUrl, function (err, valuesFromDatabase) {
+		if (!err) {
+			for (var x in valuesFromDatabase) {
+				values [x] = valuesFromDatabase [x];
+				}
 			}
 		getFeedInfo (feedUrl, function (info, httpResponse) { //gets the info from the feed, on the net
-			if (true) { //(flFeedWasInDatabase || (httpResponse.statusCode == 200)) {
-				values.code = httpResponse.statusCode;
-				values.whenUpdated = formatDateTime (whenstart);
-				values.ctSecs = utils.secondsSince (whenstart);
-				if (values.ctsecs !== undefined) {
-					delete values.ctsecs;
-					}
-				values.ctChecks++;
-				
-				function updateRecord (values, callback) {
-					var sqltext = "replace into feeds " + davesql.encodeValues (values);
-					stats.lastFeedUpdate = values;
-					davesql.runSqltext (sqltext, function (err, result) {
-						resetFeedSubCount (feedUrl, function () {
-							if (callback !== undefined) {
-								callback (values);
-								}
-							});
-						});
-					}
-				if (info !== undefined) {
-					values.title = utils.maxStringLength (info.title, config.maxLengthFeedTitle, true, true); 
-					values.htmlUrl = info.htmlUrl;
-					values.description = utils.maxStringLength (info.description, config.maxLengthFeedDescription, true, true); 
-					values.ctConsecutiveErrors = 0;
+			function monitorFeedChecks () {
+				if (debugFeedChecks [feedUrl] === undefined) {
+					debugFeedChecks [feedUrl] = {
+						ctChecks: values.ctChecks,
+						ctChecksDb: values.ctChecks
+						};
 					}
 				else {
-					values.ctErrors++;
-					values.ctConsecutiveErrors++;
-					values.whenLastError = values.whenUpdated;
+					debugFeedChecks [feedUrl] = {
+						ctChecks: debugFeedChecks [feedUrl].ctChecks++,
+						ctChecksDb: values.ctChecks
+						};
 					}
-				updateRecord (values, callback); 
+				saveDebugFeedChecks ()
+				}
+			
+			values.ctChecks++;
+			
+			values.code = httpResponse.statusCode;
+			values.whenUpdated = formatDateTime (whenstart);
+			values.ctSecs = utils.secondsSince (whenstart);
+			if (values.ctsecs !== undefined) {
+				delete values.ctsecs;
+				}
+			if (info !== undefined) {
+				values.title = utils.maxStringLength (info.title, config.maxLengthFeedTitle, true, true); 
+				values.htmlUrl = info.htmlUrl;
+				values.description = utils.maxStringLength (info.description, config.maxLengthFeedDescription, true, true); 
+				values.ctConsecutiveErrors = 0;
 				}
 			else {
-				callback ();
+				values.ctErrors++;
+				values.ctConsecutiveErrors++;
+				values.whenLastError = values.whenUpdated;
 				}
+			var sqltext = "replace into feeds " + davesql.encodeValues (values);
+			stats.lastFeedUpdate = values;
+			statsChanged ();
+			davesql.runSqltext (sqltext, function (err, result) {
+				console.log ("addFeedToDatabase: feedUrl == " + feedUrl);
+				monitorFeedChecks (feedUrl);
+				resetFeedSubCount (feedUrl, function () {
+					if (callback !== undefined) {
+						callback (values);
+						}
+					});
+				});
 			});
 		});
 	}
+
+
+
+
+
 function adjustHotlistCounts (theList) {
 	var addCounts = new Object ();
 	for (var i = theList.length - 1; i >= 0; i--) {
@@ -501,8 +535,10 @@ function getOpmlFromArray (metadata, feedsArray) {
 		for (var x in metadata) {
 			if (x !== "name") {
 				var s = metadata [x];
-				if (s.length > 0) {
-					add ("<" + x + ">" + encode (s) + "</" + x + ">");
+				if (s !== undefined) { //12/21/20 AM by DW -- the app actually got this error, go figure
+					if (s.length > 0) {
+						add ("<" + x + ">" + encode (s) + "</" + x + ">");
+						}
 					}
 				}
 			}
@@ -734,13 +770,20 @@ function updateOneFeed (feedUrl, callback) {
 		});
 	}
 function updateLeastRecentlyUpdatedFeed (callback) {
-	var sqltext = "SELECT * FROM feeds ORDER BY whenUpdated ASC LIMIT 1;";
+	var sqltext = "select * from feeds order by whenUpdated asc limit 1;";
 	davesql.runSqltext (sqltext, function (err, result) {
-		if (result.length > 0) { //3/7/18 by DW
-			var theFeed = result [0];
-			var secsSinceUpdate = utils.secondsSince (theFeed.whenUpdated);
-			if (secsSinceUpdate >= config.minSecsBetwSingleFeedUpdate) {
-				updateOneFeed (theFeed.feedUrl, callback);
+		if (err) { //12/17/20 by DW
+			if (callback !== undefined) {
+				callback (err);
+				}
+			}
+		else {
+			if (result.length > 0) {
+				var theFeed = result [0];
+				var secsSinceUpdate = utils.secondsSince (theFeed.whenUpdated);
+				if (secsSinceUpdate >= config.minSecsBetwSingleFeedUpdate) {
+					updateOneFeed (theFeed.feedUrl, callback);
+					}
 				}
 			}
 		});
