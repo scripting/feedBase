@@ -1,23 +1,18 @@
 {
 	"name": "feedbase",
-	"description": "Let's get some feeds into a database.",
-	"author": "Dave Winer <dave@scripting.com>",
-	"version": "0.7.2",
+	"version": "0.8.0",
+	"main": "feedbase.js",
 	"dependencies" : {
-		"request": "*",
 		"crypto": "*", 
-		"feedparser": "*",
+		"request": "*", 
 		"dateformat": "*",
 		"daveutils": "*",
 		"davesql": "*",
 		"davefeedread": "*",
-		"davetwitter": "*",
-		"daveopml": "*",
 		"daves3": "*",
-		"s3folderloader": "*"
-		}, 
-	"license": "MIT",
-	"engines": {
-		"node": "*"
+		"daveopml": "*",
+		"davetwitter": "*",
+		"daveappserver": "*",
+		"river6": "*"
 		}
 	}
