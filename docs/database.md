@@ -50,27 +50,37 @@ create table feeds (
 
       feedUrl varchar (512), 
 
-      title varchar (255), 
+      title text, 
 
-      htmlUrl varchar (512), 
+      htmlUrl text, 
 
       description text, 
 
+      whenCreated datetime, 
+
       whenUpdated datetime, 
+
+      ctChecks int default 0, 
 
       countSubs int, 
 
       ctSecs float, 
 
-      code int, 
-
       ctErrors int default 0, 
 
       ctConsecutiveErrors int default 0, 
 
-      ctChecks int default 0, 
+      errorString text, 
 
       whenLastError datetime, 
+
+      code int default 0,
+
+      urlCloudServer text, 
+
+      whenLastCloudRenew datetime, 
+
+      ctCloudRenews int default 0, 
 
       primary key (feedUrl)
 
@@ -78,15 +88,53 @@ create table feeds (
 
 create table subscriptions (
 
-      username varchar (255), 
-
-      listname varchar (255), 
+      listName varchar (255), 
 
       feedUrl varchar (512), 
 
-      whenupdated datetime, 
+      whenUpdated datetime, 
 
-      PRIMARY KEY (feedUrl, username)
+      categories varchar (1024),
+
+      primary key (feedUrl, listName)
+
+      );
+
+create table items (
+
+      feedUrl varchar (512), 
+
+      guid varchar (255), 
+
+      permaLink text,
+
+      title text, 
+
+      link text, 
+
+      description text, 
+
+      fullDescription longtext,  
+
+      pubDate datetime, 
+
+      enclosureUrl text, 
+
+      enclosureType text, 
+
+      enclosureLength int default 0, 
+
+      id int default 0, 
+
+      whenCreated datetime, 
+
+      whenUpdated datetime, 
+
+      flDeleted boolean, 
+
+      outlineJsontext text, 
+
+      primary key (feedUrl, guid)
 
       );
 
