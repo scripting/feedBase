@@ -4,47 +4,29 @@ This is an example of config.json file that goes in the same directory as the fe
 
 ### Example
 
-```JSON
+```json
 
 { 
+	"twitter": {
+		"myDomain": "hellofeeds.com",
+		"myPort": 3300,
+		"httpPort": 3300,
+		"flLogToConsole": true,
+		"twitterConsumerKey": "jrl45phma6cdhilc51o2dnwiq",
+		"twitterConsumerSecret": "vwixhuvhu9h6psaedktjfyfpanruzxf3dfbpleswax1xlinqun"
+		},
+	"database": {
+		"host": "localhost",
+		"port": 3306,
+		"user": "root",
+		"password": "altavista",
+		"charset": "utf8mb4",
+		"connectionLimit": 10,
+		"database": "feedbase",
+		"debug": false
+		}
+	}
 
-"twitter": {
-
-"myDomain": "hellofeeds.com",
-
-"myPort": 3300,
-
-"httpPort": 3300,
-
-"flLogToConsole": true,
-
-"twitterConsumerKey": "jrl45phma6cdhilc51o2dnwiq",
-
-"twitterConsumerSecret": "vwixhuvhu9h6psaedktjfyfpanruzxf3dfbpleswax1xlinqun"
-
-},
-
-"database": {
-
-"host": "localhost",
-
-"port": 3306,
-
-"user": "root",
-
-"password": "altavista",
-
-"charset": "utf8mb4",
-
-"connectionLimit": 10,
-
-"database": "feedbase",
-
-"debug": false
-
-}
-
-}
 
 ```
 
