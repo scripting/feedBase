@@ -1,4 +1,5 @@
 * ### 0.6.24 -- 11/26/19 by DW
+   * Added nightly backup code to the app.
    * Moved my database from the local computer to a hosted database at DO.
    * Changed the type of the feeds description column to text, also updated the docs.
       * ALTER TABLE feeds MODIFY description text;

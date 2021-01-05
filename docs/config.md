@@ -6,7 +6,7 @@ This is an example of config.json file that goes in the same directory as the fe
 
 ```json
 
-{
+{ 
 
 "twitter": {
 
