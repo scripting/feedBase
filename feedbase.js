@@ -31,7 +31,7 @@ var appOptions = {
 var config = {
 	flFeedUpdates: false,
 	ctSecsBetwFeedUpdates: 10, //10 secs between feed updates
-	usersFolder: "users/",
+	usersFolder: "data/users/",
 	fnamePrefs: "prefs.json", //each user's prefs file
 	savedFeedInfoFolder: "data/feeds/",
 	fnameStats: "data/stats.json",
@@ -227,7 +227,6 @@ function getUserOpmlSubscriptions (username, catname, callback) {
 	function findCat (theCats, catname) {
 		var theCat = undefined;
 		if (catname !== undefined) {
-			console.log ("findCat: theCats == " + utils.jsonStringify (theCats) + ", catname == " + catname);
 			theCats.forEach (function (item) {
 				if (item.name.toLowerCase () == catname.toLowerCase ()) {
 					theCat = item;
@@ -245,49 +244,55 @@ function getUserOpmlSubscriptions (username, catname, callback) {
 		catch (err) {
 			whenCreated = now;
 			}
-		getSubscriptions (username, function (feedsArray) {
-			var thisCatsFeeds;
-			if (catname === undefined) {
-				thisCatsFeeds = feedsArray;
+		getSubscriptions (username, function (err, feedsArray) {
+			if (err) {
+				callback (err);
 				}
 			else {
-				thisCatsFeeds = new Array ();
-				if (feedsArray !== undefined) {
-					feedsArray.forEach (function (theFeed) {
-						if (theFeed.categories !== undefined) {
-							var splits = theFeed.categories.split (",");
-							splits.forEach (function (s) {
-								if (s.toLowerCase () == catname.toLowerCase ()) {
-									thisCatsFeeds.push (theFeed);
-									}
-								});
-							}
-						});
+				var thisCatsFeeds;
+				console.log ("getUserOpmlSubscriptions: feedsArray == " + utils.jsonStringify (feedsArray));
+				if (catname === undefined) {
+					thisCatsFeeds = feedsArray;
 					}
-				}
-			var title;
-			if (catname === undefined) {
-				title = "Subscriptions for " + username;
-				}
-			else {
-				title = username + ": " + catname + " feeds.";
-				}
-			var description = "";
-			var metadata = {
-				title,
-				description,
-				dateCreated: whenCreated
-				};
-			if (jstruct.prefs.categories !== undefined) { //12/6/20 by DW
-				var thisCategory = findCat (jstruct.prefs.categories, catname);
-				if (thisCategory !== undefined) {
-					for (var x in thisCategory) {
-						metadata [x] = thisCategory [x];
+				else {
+					thisCatsFeeds = new Array ();
+					if (feedsArray !== undefined) {
+						feedsArray.forEach (function (theFeed) {
+							if (theFeed.categories !== undefined) {
+								var splits = theFeed.categories.split (",");
+								splits.forEach (function (s) {
+									if (s.toLowerCase () == catname.toLowerCase ()) {
+										thisCatsFeeds.push (theFeed);
+										}
+									});
+								}
+							});
 						}
 					}
+				var title;
+				if (catname === undefined) {
+					title = "Subscriptions for " + username;
+					}
+				else {
+					title = username + ": " + catname + " feeds.";
+					}
+				var description = "";
+				var metadata = {
+					title,
+					description,
+					dateCreated: whenCreated
+					};
+				if (jstruct.prefs.categories !== undefined) { //12/6/20 by DW
+					var thisCategory = findCat (jstruct.prefs.categories, catname);
+					if (thisCategory !== undefined) {
+						for (var x in thisCategory) {
+							metadata [x] = thisCategory [x];
+							}
+						}
+					}
+				var opmltext = getOpmlFromArray (metadata, thisCatsFeeds);
+				callback (undefined, opmltext);
 				}
-			var opmltext = getOpmlFromArray (metadata, thisCatsFeeds);
-			callback (undefined, opmltext);
 			});
 		});
 	}
@@ -313,7 +318,7 @@ function uploadUserOpmlToS3 (username, callback) { //2/28/18 by DW
 					var path = config.opmlS3path + username + "/" + fname;
 					s3.newObject (path, opmltext, "text/xml", "public-read", function (err, data) {
 						console.log ("uploadUserOpmlToS3: url == http:/" + path);
-						var f = config.usersFolder + username + "/" + fname; //3/13/18 by DW
+						var f = config.usersFolder + username + "/opml/" + fname; //3/13/18 by DW && 1/6/21 by DW
 						utils.sureFilePath (f, function () {
 							fs.writeFile (f, opmltext, function (err) {
 								});
@@ -396,26 +401,33 @@ function userUploadedOpml (screenname, opmltext, callback) { //called when the u
 		}
 	function subscribe (screenname, feedUrl, callback) {
 		console.log ("subscribe: screenname == " + screenname + ", feedUrl == " + feedUrl);
-		var theSubscription = {
-			listName: screenname, //12/24/20 by DW
-			feedUrl: feedUrl,
-			whenUpdated: new Date ()
-			};
-		var sqltext = "replace into subscriptions " + davesql.encodeValues (theSubscription);
-		davesql.runSqltext (sqltext, function (err, result) {
-			river6.readFeed (feedUrl, true, function (err, theFeed) {
-				if (err) {
-					if (callback !== undefined) {
-						callback (err);
-						}
+		river6.readFeed (feedUrl, true, function (err, theFeed) {
+			if (err) {
+				if (callback !== undefined) {
+					callback (err);
 					}
-				else {
-					if (callback !== undefined) {
-						callback (undefined, theSubscription);
+				}
+			else {
+				var theSubscription = {
+					listName: screenname, //12/24/20 by DW
+					feedUrl: feedUrl,
+					whenUpdated: new Date ()
+					};
+				var sqltext = "replace into subscriptions " + davesql.encodeValues (theSubscription);
+				davesql.runSqltext (sqltext, function (err, result) {
+					if (err) {
+						if (callback !== undefined) {
+							callback (err);
+							}
 						}
-					}
-				});
-			resetFeedSubCount (feedUrl);
+					else {
+						resetFeedSubCount (feedUrl);
+						if (callback !== undefined) {
+							callback (undefined, theFeed);
+							}
+						}
+					});
+				}
 			});
 		}
 	function unsubscribe (screenname, feedUrl, callback) {
@@ -808,22 +820,6 @@ function httpRequest (theRequest) {
 					});
 				});
 			return (true); 
-		case "/subscribelist": //12/29/20 by DW
-			callWithScreenname (function (screenname) {
-				var theList;
-				try {
-					theList = JSON.parse (params.list);
-					}
-				catch (err) {
-					returnError (err);
-					return (true);
-					}
-				subscribeList (screenname, theList, function (err, result) {
-					updateUserOpml (screenname);
-					httpReturn (err, result);
-					});
-				});
-			return (true); 
 		case "/issubscribed":
 			callWithScreenname (function (screenname) {
 				isSubscribed (screenname, params.feedurl, httpReturn);
@@ -976,7 +972,6 @@ function updateLeastRecentlyUpdatedFeed (callback) {
 		});
 	
 	}
-
 
 function everyMinute () {
 	}
