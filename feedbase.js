@@ -22,13 +22,15 @@ var appOptions = {
 	productName: myProductName, 
 	productNameForDisplay: "feedBase2",
 	version: myVersion,
-	urlServerHomePageSource: "http://scripting.com/code/testing/feedbase/index.html",
+	urlServerHomePageSource: "http://scripting.com/code/feedbase/index.html",
 	flWebsocketEnabled: false,
 	everySecond,
 	everyMinute,
 	httpRequest
 	}
 var config = {
+	port: process.env.PORT || 1820,
+	websocketPort: 1822,
 	flFeedUpdates: false,
 	ctSecsBetwFeedUpdates: 10, //10 secs between feed updates
 	usersFolder: "data/users/",
